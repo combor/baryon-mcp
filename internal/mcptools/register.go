@@ -12,6 +12,8 @@ import (
 // RegisterAll adds every tool to the server, backed by bridge.
 func RegisterAll(server *mcp.Server, bridge bridgeclient.Bridge) {
 	registerListFolders(server, bridge)
+	registerListEmails(server, bridge)
+	registerSearchEmails(server, bridge)
 }
 
 // readOnly returns the annotations shared by all baryon-mcp tools.

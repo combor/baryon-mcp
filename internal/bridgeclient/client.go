@@ -40,6 +40,7 @@ type Folder struct {
 // tests substitute a fake.
 type Bridge interface {
 	ListFolders(ctx context.Context) ([]Folder, error)
+	ListMessages(ctx context.Context, folder string, criteria SearchCriteria, limit, offset int) (*MessagePage, error)
 }
 
 // Client implements Bridge against a real Proton Mail Bridge instance.

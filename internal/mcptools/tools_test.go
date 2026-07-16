@@ -16,10 +16,29 @@ import (
 type fakeBridge struct {
 	folders    []bridgeclient.Folder
 	foldersErr error
+
+	page     *bridgeclient.MessagePage
+	pageErr  error
+	gotQuery struct {
+		folder        string
+		criteria      bridgeclient.SearchCriteria
+		limit, offset int
+	}
 }
 
 func (f *fakeBridge) ListFolders(ctx context.Context) ([]bridgeclient.Folder, error) {
 	return f.folders, f.foldersErr
+}
+
+func (f *fakeBridge) ListMessages(ctx context.Context, folder string, criteria bridgeclient.SearchCriteria, limit, offset int) (*bridgeclient.MessagePage, error) {
+	f.gotQuery.folder = folder
+	f.gotQuery.criteria = criteria
+	f.gotQuery.limit = limit
+	f.gotQuery.offset = offset
+	if f.page == nil {
+		return &bridgeclient.MessagePage{}, f.pageErr
+	}
+	return f.page, f.pageErr
 }
 
 // newTestSession wires a server with the given bridge to an in-memory client
