@@ -33,3 +33,7 @@ go.work.sum
 
 # Local planning notes (not part of the shipped project)
 /plans/
+
+# Build artifacts
+/baryon-mcp
+/dist/

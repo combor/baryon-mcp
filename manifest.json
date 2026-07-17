@@ -1,0 +1,92 @@
+{
+  "$schema": "https://raw.githubusercontent.com/anthropics/mcpb/main/schemas/mcpb-manifest-v0.4.schema.json",
+  "manifest_version": "0.4",
+  "name": "baryon-mcp",
+  "display_name": "Baryon — Proton Mail via Bridge",
+  "version": "0.1.0",
+  "description": "Read-only Proton Mail access for Claude through your local Proton Mail Bridge.",
+  "long_description": "Baryon exposes your Proton Mail mailbox to MCP clients as six read-only tools (list folders, list/search emails, read a message, list and fetch attachments). It talks IMAP to the Proton Mail Bridge running on your machine over loopback only — mail never leaves your computer through this server, nothing is ever modified, and the connection to Bridge is authenticated by pinning Bridge's TLS certificate.",
+  "author": {
+    "name": "Piotr Komborski"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/combor/baryon-mcp"
+  },
+  "keywords": ["proton", "protonmail", "email", "imap", "bridge", "read-only"],
+  "server": {
+    "type": "binary",
+    "entry_point": "server/baryon-mcp",
+    "mcp_config": {
+      "command": "${__dirname}/server/baryon-mcp",
+      "args": [],
+      "env": {
+        "PROTON_BRIDGE_USERNAME": "${user_config.bridge_username}",
+        "PROTON_BRIDGE_PASSWORD": "${user_config.bridge_password}",
+        "PROTON_BRIDGE_HOST": "${user_config.bridge_host}",
+        "PROTON_BRIDGE_IMAP_PORT": "${user_config.bridge_imap_port}",
+        "PROTON_BRIDGE_IMAP_SECURITY": "${user_config.bridge_imap_security}",
+        "PROTON_BRIDGE_TLS_CERT": "${user_config.bridge_tls_cert}",
+        "PROTON_BRIDGE_ALLOW_INSECURE": "${user_config.bridge_allow_insecure}"
+      }
+    }
+  },
+  "user_config": {
+    "bridge_username": {
+      "type": "string",
+      "title": "Bridge IMAP username",
+      "description": "Shown in Proton Mail Bridge under your account's mailbox configuration (usually your Proton address).",
+      "required": true
+    },
+    "bridge_password": {
+      "type": "string",
+      "title": "Bridge password",
+      "description": "The password Bridge generated for IMAP clients — not your Proton account password. Stored in the OS keychain.",
+      "sensitive": true,
+      "required": true
+    },
+    "bridge_host": {
+      "type": "string",
+      "title": "Bridge host",
+      "description": "Loopback address Bridge listens on. Only loopback addresses are accepted.",
+      "default": "127.0.0.1"
+    },
+    "bridge_imap_port": {
+      "type": "number",
+      "title": "Bridge IMAP port",
+      "description": "Bridge's IMAP port (Bridge default is 1143).",
+      "default": 1143,
+      "min": 1,
+      "max": 65535
+    },
+    "bridge_imap_security": {
+      "type": "string",
+      "title": "IMAP connection mode",
+      "description": "\"starttls\" for Bridge's default STARTTLS mode, or \"tls\" if you switched Bridge's IMAP connection mode to SSL.",
+      "default": "starttls"
+    },
+    "bridge_tls_cert": {
+      "type": "file",
+      "title": "Bridge TLS certificate",
+      "description": "Bridge's certificate for a verified connection: in Bridge go to Settings → Advanced settings → Export TLS certificates, then pick the exported cert.pem here. Without it the server refuses to start unless insecure mode is enabled below."
+    },
+    "bridge_allow_insecure": {
+      "type": "boolean",
+      "title": "Allow unverified connection",
+      "description": "Connect without verifying Bridge's TLS certificate. Only enable if you understand that another local process could impersonate Bridge and capture the Bridge password.",
+      "default": false
+    }
+  },
+  "compatibility": {
+    "platforms": ["darwin"]
+  },
+  "tools": [
+    { "name": "list_folders", "description": "List all folders in the mailbox" },
+    { "name": "list_emails", "description": "List messages in a folder, newest first, with pagination" },
+    { "name": "search_emails", "description": "Search messages by text, sender, recipient, subject, date range, or unread state" },
+    { "name": "get_email", "description": "Read one message's metadata, text bodies, and attachment list" },
+    { "name": "list_attachments", "description": "List a message's attachments without transferring content" },
+    { "name": "get_attachment", "description": "Fetch one attachment (up to 1 MiB encoded)" }
+  ]
+}

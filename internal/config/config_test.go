@@ -107,6 +107,19 @@ func TestLoadAllowInsecure(t *testing.T) {
 	}
 }
 
+func TestLoadUnresolvedTemplateTreatedAsUnset(t *testing.T) {
+	m := validEnv()
+	m["PROTON_BRIDGE_TLS_CERT"] = "${user_config.bridge_tls_cert}"
+	m["PROTON_BRIDGE_ALLOW_INSECURE"] = "${user_config.bridge_allow_insecure}"
+	cfg, err := Load(env(m))
+	if err != nil {
+		t.Fatalf("unresolved templates must not fail Load: %v", err)
+	}
+	if cfg.TLSCertPath != "" || cfg.AllowInsecure {
+		t.Errorf("templates should read as unset, got %+v", cfg)
+	}
+}
+
 func TestLoadTLSCertPath(t *testing.T) {
 	m := validEnv()
 	m["PROTON_BRIDGE_TLS_CERT"] = filepath.Join(t.TempDir(), "missing.pem")

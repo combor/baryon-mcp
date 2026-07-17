@@ -24,6 +24,15 @@ type fakeBridge struct {
 		criteria      bridgeclient.SearchCriteria
 		limit, offset int
 	}
+
+	email    *bridgeclient.EmailContent
+	emailErr error
+
+	attachments    []bridgeclient.AttachmentInfo
+	attachmentsErr error
+
+	attachment    *bridgeclient.AttachmentContent
+	attachmentErr error
 }
 
 func (f *fakeBridge) ListFolders(ctx context.Context) ([]bridgeclient.Folder, error) {
@@ -39,6 +48,24 @@ func (f *fakeBridge) ListMessages(ctx context.Context, folder string, criteria b
 		return &bridgeclient.MessagePage{}, f.pageErr
 	}
 	return f.page, f.pageErr
+}
+
+func (f *fakeBridge) GetEmail(ctx context.Context, folder string, uid, uidvalidity uint32) (*bridgeclient.EmailContent, error) {
+	if f.email == nil {
+		return nil, f.emailErr
+	}
+	return f.email, f.emailErr
+}
+
+func (f *fakeBridge) ListAttachments(ctx context.Context, folder string, uid, uidvalidity uint32) ([]bridgeclient.AttachmentInfo, error) {
+	return f.attachments, f.attachmentsErr
+}
+
+func (f *fakeBridge) GetAttachment(ctx context.Context, folder string, uid, uidvalidity uint32, index int) (*bridgeclient.AttachmentContent, error) {
+	if f.attachment == nil {
+		return nil, f.attachmentErr
+	}
+	return f.attachment, f.attachmentErr
 }
 
 // newTestSession wires a server with the given bridge to an in-memory client

@@ -14,6 +14,9 @@ func RegisterAll(server *mcp.Server, bridge bridgeclient.Bridge) {
 	registerListFolders(server, bridge)
 	registerListEmails(server, bridge)
 	registerSearchEmails(server, bridge)
+	registerGetEmail(server, bridge)
+	registerListAttachments(server, bridge)
+	registerGetAttachment(server, bridge)
 }
 
 // readOnly returns the annotations shared by all baryon-mcp tools.

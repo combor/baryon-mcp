@@ -46,9 +46,17 @@ func (c *Config) Addr() string {
 	return net.JoinHostPort(c.Host, strconv.Itoa(c.Port))
 }
 
-// Load reads configuration using getenv (usually os.Getenv; injectable for
-// tests). An empty value is treated as unset.
-func Load(getenv func(string) string) (*Config, error) {
+// Load reads configuration using rawGetenv (usually os.Getenv; injectable for
+// tests). Empty values and unresolved MCPB config templates (a literal
+// "${...}" left by the host for an unset optional field) are treated as unset.
+func Load(rawGetenv func(string) string) (*Config, error) {
+	getenv := func(key string) string {
+		v := rawGetenv(key)
+		if strings.HasPrefix(v, "${") && strings.HasSuffix(v, "}") {
+			return ""
+		}
+		return v
+	}
 	cfg := &Config{
 		Username:    getenv("PROTON_BRIDGE_USERNAME"),
 		Password:    getenv("PROTON_BRIDGE_PASSWORD"),

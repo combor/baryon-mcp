@@ -1,0 +1,61 @@
+version: 2
+
+project_name: baryon-mcp
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: baryon-mcp
+    main: ./cmd/baryon-mcp
+    binary: baryon-mcp
+    env:
+      - CGO_ENABLED=0
+    mod_timestamp: '{{ .CommitTimestamp }}'
+    flags:
+      - -trimpath
+    ldflags:
+      - '-s -w -X main.version={{.Version}}'
+    goos:
+      - darwin
+      - linux
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
+    hooks:
+      # Packs each binary into an MCPB bundle; skips single-arch darwin
+      # (the universal binary below covers macOS).
+      post:
+        - cmd: ./scripts/mcpb-pack.sh {{ .Os }} {{ .Arch }} "{{ .Path }}" {{ .Version }}
+
+universal_binaries:
+  - replace: true
+    mod_timestamp: '{{ .CommitTimestamp }}'
+    hooks:
+      post:
+        - cmd: ./scripts/mcpb-pack.sh darwin all "{{ .Path }}" {{ .Version }}
+
+archives:
+  - formats:
+      - tar.gz
+    name_template: '{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}'
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+
+checksum:
+  name_template: '{{ .ProjectName }}_{{ .Version }}_SHA256SUMS'
+  algorithm: sha256
+
+release:
+  extra_files:
+    - glob: dist/mcpb/*.mcpb
+
+changelog:
+  disable: true
