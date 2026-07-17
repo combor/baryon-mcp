@@ -5,6 +5,9 @@ project_name: baryon-mcp
 before:
   hooks:
     - go mod tidy
+    # Warm the npx cache serially; concurrent post-build hooks otherwise race
+    # to install @anthropic-ai/mcpb on a cold cache and read torn modules.
+    - npx --yes @anthropic-ai/mcpb --version
 
 builds:
   - id: baryon-mcp
