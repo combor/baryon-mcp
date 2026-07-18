@@ -16,7 +16,7 @@ func msgRefArgs() map[string]any {
 
 func TestGetEmailBodiesInContentOnly(t *testing.T) {
 	fake := &fakeBridge{email: &bridgeclient.EmailContent{
-		Summary: bridgeclient.EmailSummary{Subject: "hello", From: []string{"a@x"}},
+		Summary: bridgeclient.EmailSummary{Subject: "hello", From: []string{"a@x"}, Bcc: []string{"hidden@x"}},
 		Plain:   &bridgeclient.TextBody{Text: "plain body", Truncated: true},
 		HTML:    &bridgeclient.TextBody{Text: "<p>html</p>", CharsetFallback: true},
 		Attachments: []bridgeclient.AttachmentInfo{
@@ -45,6 +45,9 @@ func TestGetEmailBodiesInContentOnly(t *testing.T) {
 	}
 	if !out.TextTruncated || !out.CharsetFallback || out.HTMLTruncated {
 		t.Errorf("flags = %+v", out)
+	}
+	if len(out.Bcc) != 1 || out.Bcc[0] != "hidden@x" {
+		t.Errorf("bcc = %+v", out.Bcc)
 	}
 	if len(out.Attachments) != 1 || out.Attachments[0].Filename != "a.pdf" {
 		t.Errorf("attachments = %+v", out.Attachments)

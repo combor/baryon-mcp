@@ -56,6 +56,7 @@ type getEmailOutput struct {
 	From            []string         `json:"from,omitempty"`
 	To              []string         `json:"to,omitempty"`
 	Cc              []string         `json:"cc,omitempty"`
+	Bcc             []string         `json:"bcc,omitempty" jsonschema:"Bcc recipients; present when retained in the message envelope"`
 	Date            string           `json:"date,omitempty" jsonschema:"send date, RFC 3339"`
 	Seen            bool             `json:"seen"`
 	Flagged         bool             `json:"flagged,omitempty"`
@@ -88,6 +89,7 @@ func registerGetEmail(server *mcp.Server, bridge bridgeclient.Bridge) {
 			From:        s.From,
 			To:          s.To,
 			Cc:          s.Cc,
+			Bcc:         s.Bcc,
 			Seen:        s.Seen,
 			Flagged:     s.Flagged,
 			Answered:    s.Answered,

@@ -4,8 +4,8 @@
   "name": "baryon-mcp",
   "display_name": "Baryon — Proton Mail via Bridge",
   "version": "0.1.0",
-  "description": "Read-only Proton Mail access for Claude through your local Proton Mail Bridge.",
-  "long_description": "Baryon exposes your Proton Mail mailbox to MCP clients as six read-only tools (list folders, list/search emails, read a message, list and fetch attachments). It talks IMAP to the Proton Mail Bridge running on your machine over loopback only — mail never leaves your computer through this server, nothing is ever modified, and the connection to Bridge is authenticated by pinning Bridge's TLS certificate.",
+  "description": "Read Proton Mail and save drafts through your local Proton Mail Bridge.",
+  "long_description": "Baryon exposes your Proton Mail mailbox to MCP clients as seven tools: list folders, list/search emails, read a message, list and fetch attachments, and create or replace drafts. It talks IMAP to the Proton Mail Bridge running on your machine over loopback only, authenticates Bridge by pinning its TLS certificate, and keeps draft saving as its only mailbox write capability — it cannot send, move, or generally delete messages or change flags.",
   "author": {
     "name": "Piotr Komborski"
   },
@@ -87,6 +87,7 @@
     { "name": "search_emails", "description": "Search messages by text, sender, recipient, subject, date range, or unread state" },
     { "name": "get_email", "description": "Read one message's metadata, text bodies, and attachment list" },
     { "name": "list_attachments", "description": "List a message's attachments without transferring content" },
-    { "name": "get_attachment", "description": "Fetch one attachment (up to 1 MiB encoded)" }
+    { "name": "get_attachment", "description": "Fetch one attachment (up to 1 MiB decoded)" },
+    { "name": "save_draft", "description": "Create or replace a draft with plain text, optional HTML, and bounded base64 attachments" }
   ]
 }

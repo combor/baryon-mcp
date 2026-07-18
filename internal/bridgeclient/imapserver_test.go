@@ -57,6 +57,15 @@ func testMessage(n int, from string) []byte {
 // startMemServer runs a TLS-wrapped in-process IMAP server seeded via seed
 // and returns a *Client pinned to the server's certificate.
 func startMemServer(t *testing.T, seed func(u *imapmemserver.User)) *Client {
+	return startMemServerWithOptions(t, seed, nil, nil)
+}
+
+func startMemServerWithOptions(
+	t *testing.T,
+	seed func(u *imapmemserver.User),
+	caps imap.CapSet,
+	wrapSession func(imapserver.Session) imapserver.Session,
+) *Client {
 	t.Helper()
 	cert, certPEM := serverTLSCert(t)
 
@@ -67,9 +76,14 @@ func startMemServer(t *testing.T, seed func(u *imapmemserver.User)) *Client {
 
 	srv := imapserver.New(&imapserver.Options{
 		NewSession: func(*imapserver.Conn) (imapserver.Session, *imapserver.GreetingData, error) {
-			return memSrv.NewSession(), nil, nil
+			var session imapserver.Session = memSrv.NewSession()
+			if wrapSession != nil {
+				session = wrapSession(session)
+			}
+			return session, nil, nil
 		},
 		InsecureAuth: true,
+		Caps:         caps,
 	})
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -102,6 +116,7 @@ func startMemServer(t *testing.T, seed func(u *imapmemserver.User)) *Client {
 		},
 		tlsConfig: &tlsConfigHolder{config: tlsCfg},
 		sem:       make(chan struct{}, maxConcurrentConnections),
+		draftGate: make(chan struct{}, 1),
 	}
 }
 

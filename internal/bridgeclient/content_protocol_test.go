@@ -147,7 +147,7 @@ func TestProtocolAttachmentRoundtrip(t *testing.T) {
 }
 
 func TestProtocolAttachmentSizeCapRefusal(t *testing.T) {
-	big := bytes.Repeat([]byte{0xAB}, attachmentCap) // >1MiB once base64-encoded
+	big := bytes.Repeat([]byte{0xAB}, attachmentCap) // above the transfer cap once base64-encoded
 	var b strings.Builder
 	b.WriteString("From: a@x\r\nTo: b@x\r\nSubject: big\r\nMIME-Version: 1.0\r\n")
 	b.WriteString("Content-Type: multipart/mixed; boundary=B\r\n\r\n")

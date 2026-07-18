@@ -1,6 +1,5 @@
-// Package mcptools defines baryon-mcp's MCP tools. Every tool is read-only:
-// mailboxes are opened with EXAMINE and fetches peek, so no tool call can
-// mutate mail.
+// Package mcptools defines baryon-mcp's MCP tools. Read tools use EXAMINE and
+// peek fetches; save_draft is the sole mailbox-mutating tool.
 package mcptools
 
 import (
@@ -17,6 +16,7 @@ func RegisterAll(server *mcp.Server, bridge bridgeclient.Bridge) {
 	registerGetEmail(server, bridge)
 	registerListAttachments(server, bridge)
 	registerGetAttachment(server, bridge)
+	registerSaveDraft(server, bridge)
 }
 
 // readOnly returns the annotations shared by all baryon-mcp tools.

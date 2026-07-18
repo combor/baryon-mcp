@@ -29,6 +29,7 @@ type EmailSummary struct {
 	From     []string
 	To       []string
 	Cc       []string
+	Bcc      []string
 	Date     time.Time
 	Seen     bool
 	Flagged  bool
@@ -130,6 +131,7 @@ func summarize(m *imapclient.FetchMessageBuffer) EmailSummary {
 		s.From = formatAddresses(env.From)
 		s.To = formatAddresses(env.To)
 		s.Cc = formatAddresses(env.Cc)
+		s.Bcc = formatAddresses(env.Bcc)
 		s.Date = env.Date
 	}
 	return s

@@ -36,6 +36,44 @@ type Folder struct {
 	Attributes []string
 }
 
+// DraftAttachment is one regular file attachment to save with a draft.
+type DraftAttachment struct {
+	Filename    string
+	ContentType string
+	Data        []byte
+}
+
+// DraftRef identifies an existing draft within the Drafts mailbox.
+type DraftRef struct {
+	UID         uint32
+	UIDValidity uint32
+}
+
+// Draft is the complete desired state of a saved draft. Replace is nil when
+// creating a draft and identifies the previous version when updating one.
+type Draft struct {
+	From        string
+	To          []string
+	Cc          []string
+	Bcc         []string
+	Subject     string
+	TextBody    string
+	HTMLBody    string
+	Attachments []DraftAttachment
+	Replace     *DraftRef
+}
+
+// SavedDraft identifies the newly appended draft and reports whether an old
+// version was removed after a replacement.
+type SavedDraft struct {
+	Folder               string
+	UID                  uint32
+	UIDValidity          uint32
+	ReplacedUID          uint32
+	PreviousDraftRemoved bool
+	Warning              string
+}
+
 // Bridge is the surface the MCP tools consume; *Client implements it and
 // tests substitute a fake.
 type Bridge interface {
@@ -44,6 +82,7 @@ type Bridge interface {
 	GetEmail(ctx context.Context, folder string, uid, uidvalidity uint32) (*EmailContent, error)
 	ListAttachments(ctx context.Context, folder string, uid, uidvalidity uint32) ([]AttachmentInfo, error)
 	GetAttachment(ctx context.Context, folder string, uid, uidvalidity uint32, index int) (*AttachmentContent, error)
+	SaveDraft(ctx context.Context, draft Draft) (*SavedDraft, error)
 }
 
 // Client implements Bridge against a real Proton Mail Bridge instance.
@@ -51,6 +90,7 @@ type Client struct {
 	cfg       *config.Config
 	tlsConfig *tlsConfigHolder
 	sem       chan struct{}
+	draftGate chan struct{}
 }
 
 // tlsConfigHolder keeps the resolved TLS material together with how it was
@@ -73,6 +113,7 @@ func New(cfg *config.Config) (*Client, error) {
 		cfg:       cfg,
 		tlsConfig: &tlsConfigHolder{config: tlsCfg, source: source},
 		sem:       make(chan struct{}, maxConcurrentConnections),
+		draftGate: make(chan struct{}, 1),
 	}, nil
 }
 

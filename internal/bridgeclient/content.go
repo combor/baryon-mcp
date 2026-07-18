@@ -12,12 +12,14 @@ import (
 )
 
 const (
-	// textPartCap bounds the encoded bytes transferred per text body part.
-	textPartCap = 256 * 1024
-	// attachmentCap is the max encoded size get_attachment will transfer.
-	attachmentCap = 1024 * 1024
+	// textPartCap covers the worst-case quoted-printable encoding of a
+	// MaxDraftBodyChars UTF-8 body while still bounding transferred bytes.
+	textPartCap = 768 * 1024
+	// attachmentCap covers base64 and line-wrapping overhead for one maximum
+	// decoded draft attachment. The decoded-size check below remains authoritative.
+	attachmentCap = 3 * MaxDraftAttachmentBytes / 2
 	// bodyCharCap bounds decoded body text length in characters.
-	bodyCharCap = 50_000
+	bodyCharCap = MaxDraftBodyChars
 )
 
 // TextBody is one decoded body part.
@@ -180,8 +182,8 @@ func (c *Client) ListAttachments(ctx context.Context, folder string, uid, uidval
 	return infos, nil
 }
 
-// GetAttachment fetches and decodes one attachment, refusing oversized parts
-// before any content is transferred.
+// GetAttachment fetches and decodes one attachment, bounding both encoded
+// transfer size and decoded output size.
 func (c *Client) GetAttachment(ctx context.Context, folder string, uid, uidvalidity uint32, index int) (*AttachmentContent, error) {
 	var content *AttachmentContent
 	err := c.withMessage(ctx, folder, uidvalidity, func(cli *imapclient.Client) error {
@@ -215,6 +217,9 @@ func (c *Client) GetAttachment(ctx context.Context, folder string, uid, uidvalid
 		data, err := mailparse.DecodeBinary(raw, att.Encoding)
 		if err != nil {
 			return err
+		}
+		if len(data) > MaxDraftAttachmentBytes {
+			return fmt.Errorf("attachment %q is %d bytes decoded, above the %d byte limit for inline retrieval", att.Filename, len(data), MaxDraftAttachmentBytes)
 		}
 		content = &AttachmentContent{
 			Filename:    att.Filename,

@@ -58,6 +58,7 @@ func testClient(t *testing.T, addr string) *Client {
 		},
 		tlsConfig: &tlsConfigHolder{config: &tls.Config{InsecureSkipVerify: true}},
 		sem:       make(chan struct{}, maxConcurrentConnections),
+		draftGate: make(chan struct{}, 1),
 	}
 }
 

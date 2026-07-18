@@ -33,6 +33,11 @@ type fakeBridge struct {
 
 	attachment    *bridgeclient.AttachmentContent
 	attachmentErr error
+
+	gotDraft       bridgeclient.Draft
+	savedDraft     *bridgeclient.SavedDraft
+	saveDraftErr   error
+	saveDraftCalls int
 }
 
 func (f *fakeBridge) ListFolders(ctx context.Context) ([]bridgeclient.Folder, error) {
@@ -66,6 +71,15 @@ func (f *fakeBridge) GetAttachment(ctx context.Context, folder string, uid, uidv
 		return nil, f.attachmentErr
 	}
 	return f.attachment, f.attachmentErr
+}
+
+func (f *fakeBridge) SaveDraft(ctx context.Context, draft bridgeclient.Draft) (*bridgeclient.SavedDraft, error) {
+	f.saveDraftCalls++
+	f.gotDraft = draft
+	if f.savedDraft == nil {
+		return nil, f.saveDraftErr
+	}
+	return f.savedDraft, f.saveDraftErr
 }
 
 // newTestSession wires a server with the given bridge to an in-memory client

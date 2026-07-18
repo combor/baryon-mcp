@@ -53,7 +53,7 @@ type getAttachmentOutput struct {
 func registerGetAttachment(server *mcp.Server, bridge bridgeclient.Bridge) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "get_attachment",
-		Description: "Fetch one attachment's content (up to 1 MiB encoded). Images are returned as image content; other files as base64 text. Metadata is in the structured output.",
+		Description: "Fetch one attachment's content (up to 1 MiB decoded). Images are returned as image content; other files as base64 text. Metadata is in the structured output.",
 		Annotations: readOnly("Get attachment"),
 	}, func(ctx context.Context, req *mcp.CallToolRequest, in getAttachmentInput) (*mcp.CallToolResult, getAttachmentOutput, error) {
 		if err := in.validate(); err != nil {

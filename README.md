@@ -1,6 +1,6 @@
 # baryon-mcp
 
-A **read-only** [MCP](https://modelcontextprotocol.io) server for Proton Mail, written in Go. It talks IMAP to the [Proton Mail Bridge](https://proton.me/mail/bridge) running on your machine, so Claude (or any MCP client) can browse and read your mail — and nothing else.
+An [MCP](https://modelcontextprotocol.io) server for Proton Mail, written in Go. It talks IMAP to the [Proton Mail Bridge](https://proton.me/mail/bridge) running on your machine, so Claude (or any MCP client) can browse and read your mail and save drafts.
 
 *Why "baryon"? A proton is a baryon. All the obvious names were taken.*
 
@@ -13,15 +13,25 @@ A **read-only** [MCP](https://modelcontextprotocol.io) server for Proton Mail, w
 | `search_emails` | Search by text, sender, recipient, subject, date range, or unread state |
 | `get_email` | Read one message: metadata, decoded text/HTML bodies, attachment list |
 | `list_attachments` | List a message's attachments without transferring content |
-| `get_attachment` | Fetch one attachment (up to 1 MiB encoded; images returned natively) |
+| `get_attachment` | Fetch one attachment (up to 1 MiB decoded; images returned natively) |
+| `save_draft` | Create or replace a draft, with plain text, HTML, and attachments |
 
-There are deliberately **no write tools** — no send, move, delete, or flag changes. Mailboxes are opened with IMAP `EXAMINE` and all fetches peek, so even read tools can never mark a message as read.
+Draft saving is deliberately the **only write capability**. There are no tools to send, move, or generally delete messages or change flags. Read tools open mailboxes with IMAP `EXAMINE` and all fetches peek, so they cannot mark a message as read.
+
+### Saving drafts
+
+`save_draft` accepts a sender, optional To/Cc/Bcc recipients, subject, plain-text body, optional HTML alternative, and regular file attachments supplied as standard base64. The sender must be one of the Proton addresses available through the configured Bridge account.
+
+Omit `uid` and `uidvalidity` to create a draft. To update one, pass both values from a Drafts `list_emails` or `search_emails` result and supply the complete desired draft again. Call `get_email` first to recover all recipients (including Bcc), bodies, and the attachment list, then use `get_attachment` for attachment content. Baryon preserves the previous Message-ID. It refuses to replace drafts carrying In-Reply-To or References headers because Bridge's IMAP draft-creation path cannot retain that reply-thread metadata. IMAP replacements receive a new UID: baryon appends the replacement first and only then deletes the previous UID, so a rejected upload cannot destroy the existing draft. If the replacement is saved but old-draft cleanup fails, the tool returns the new UID with `previous_draft_removed: false` and a warning about the possible duplicate.
+
+The first version supports up to 10 regular attachments, 1 MiB decoded per attachment and 4 MiB decoded in total. Plain-text and HTML bodies are each capped at 50,000 characters. Inline CID images and attachment file paths are not supported.
 
 ## Security model
 
 - **Loopback only.** The server refuses any Bridge host that isn't a loopback address; your credentials and mail never leave the machine through it.
 - **TLS pinning, fail closed.** Bridge serves a self-signed certificate; baryon-mcp verifies the connection against a pinned copy of it. Without a pinned cert it refuses to start — an unverified connection would let any local process squatting Bridge's port capture the Bridge password. Insecure mode exists but only as an explicit opt-in.
-- **Bounded everything.** At most 4 concurrent IMAP connections; text bodies capped at 256 KiB transfer / 50,000 characters; attachments refused above 1 MiB encoded *before* any transfer; canceled requests abort their IMAP session immediately.
+- **Narrow write surface.** Draft discovery uses ordinary IMAP `LIST`, preferring the `\Drafts` special-use attribute when present and falling back to Proton Bridge's canonical `Drafts` mailbox name. Saving requires UIDPLUS, updates use UIDVALIDITY to reject stale identifiers, and cleanup uses targeted `UID EXPUNGE` rather than expunging a whole mailbox.
+- **Bounded everything.** At most 4 concurrent IMAP connections; fetched text bodies capped at 768 KiB transfer / 50,000 characters; fetched attachments refused above 1.5 MiB encoded before transfer and above 1 MiB decoded after decoding; saved bodies and attachments use the limits above; canceled requests abort their IMAP session immediately, including while waiting for draft serialization.
 - **Scoped credentials.** Bridge's generated IMAP password is used — never your Proton account password.
 
 ## Requirements
@@ -98,6 +108,7 @@ Releases are built by [GoReleaser](https://goreleaser.com) in CI: pushing a `v*`
 ## Design notes
 
 - One fresh IMAP connection per tool call (mailbox selection is per-connection state), bounded by a semaphore.
+- Read tools select with `EXAMINE`. Draft saving selects only the discovered Drafts mailbox read-write and serializes saves so concurrent replacements cannot race on one stale UID.
 - Message content is never fetched via whole-message `BODY[]`: the extended `BODYSTRUCTURE` is walked first, and only the needed MIME parts cross the wire, with size limits enforced from the structure's encoded sizes *before* transfer.
 - `list_emails`/`search_emails` return the folder's `uidvalidity`, and the per-message tools require it back — a Bridge cache rebuild changes it, and the mismatch error tells the client to re-list instead of silently reading the wrong message.
 
