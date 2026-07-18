@@ -1,13 +1,18 @@
-# Graph Report - /Users/piotrkomborski/src/github.com/combor/baryon-mcp  (2026-07-18)
+# Graph Report - baryon-mcp  (2026-07-18)
 
 ## Corpus Check
-- 1 files · ~18,379 words
+- 40 files · ~23,084 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 446 nodes · 811 edges · 29 communities (15 shown, 14 thin omitted)
-- Extraction: 88% EXTRACTED · 12% INFERRED · 0% AMBIGUOUS · INFERRED: 94 edges (avg confidence: 0.8)
+- 486 nodes · 949 edges · 20 communities (18 shown, 2 thin omitted)
+- Extraction: 88% EXTRACTED · 12% INFERRED · 0% AMBIGUOUS · INFERRED: 112 edges (avg confidence: 0.8)
 - Token cost: 0 input · 0 output
+
+## Graph Freshness
+- Built from commit: `22c3b942`
+- Run `git rev-parse HEAD` and compare to check if the graph is stale.
+- Run `graphify update .` after code changes (no API cost).
 
 ## Community Hubs (Navigation)
 - Read Tool Registration
@@ -28,41 +33,31 @@
 - MCPB Packaging
 - Context Type
 - Draft Type
-- Address Type
-- Append Data Type
-- Bridge Client Type
-- Time Type
-- Client Reference
-- IMAP Session Type
-- Test Type
-- MCP Server Type
-- Tool Annotation Type
-- Tool Result Type
 - Repository Root
 
 ## God Nodes (most connected - your core abstractions)
-1. `newTestSession()` - 19 edges
-2. `callTool()` - 15 edges
-3. `fakeBridge` - 15 edges
-4. `buildDraftMessage()` - 14 edges
-5. `Load()` - 13 edges
-6. `Walk()` - 12 edges
-7. `RegisterAll()` - 12 edges
-8. `buildTLSConfig()` - 11 edges
-9. `Bridge` - 10 edges
-10. `startMemServerWithOptions()` - 10 edges
+1. `newTestSession()` - 23 edges
+2. `callTool()` - 18 edges
+3. `startMemServerWithOptions()` - 17 edges
+4. `fakeBridge` - 15 edges
+5. `die()` - 15 edges
+6. `buildDraftMessage()` - 14 edges
+7. `main()` - 14 edges
+8. `New()` - 13 edges
+9. `Load()` - 13 edges
+10. `Walk()` - 12 edges
 
 ## Surprising Connections (you probably didn't know these)
 - `Fail-before Pass-after Verification Loop` --semantically_similar_to--> `Go Formatting Vetting and Race Tests`  [INFERRED] [semantically similar]
   AGENTS.md → .github/workflows/ci.yml
+- `main()` --calls--> `RegisterAll()`  [INFERRED]
+  cmd/baryon-mcp/main.go → internal/mcptools/register.go
 - `GoReleaser Action` --references--> `GoReleaser Release Configuration`  [INFERRED]
   .github/workflows/ci.yml → .goreleaser.yml
 - `main()` --calls--> `New()`  [INFERRED]
   cmd/baryon-mcp/main.go → internal/bridgeclient/client.go
-- `main()` --calls--> `RegisterAll()`  [INFERRED]
-  cmd/baryon-mcp/main.go → internal/mcptools/register.go
-- `MCPB Manifest Validation` --conceptually_related_to--> `MCPB Packaging Hook`  [INFERRED]
-  .github/workflows/ci.yml → .goreleaser.yml
+- `main()` --calls--> `Load()`  [INFERRED]
+  cmd/baryon-mcp/main.go → internal/config/config.go
 
 ## Import Cycles
 - None detected.
@@ -72,15 +67,15 @@
 - **Attachment Management** — readme_list_attachments, readme_get_attachment, readme_get_email [EXTRACTED 0.85]
 - **Repository Change Principles** — agents_focused_changes, agents_evidence_backed_review, agents_think_before_coding, agents_simplicity_first, agents_surgical_changes, agents_goal_driven_execution [EXTRACTED 1.00]
 
-## Communities (29 total, 14 thin omitted)
+## Communities (20 total, 2 thin omitted)
 
 ### Community 0 - "Read Tool Registration"
-Cohesion: 0.08
-Nodes (36): Bridge, Server, registerGetAttachment(), registerListAttachments(), Server, registerGetEmail(), toAttachmentMetas(), fetchPage() (+28 more)
+Cohesion: 0.07
+Nodes (44): Bridge, Server, registerGetAttachment(), registerListAttachments(), Server, ToolAnnotations, registerSaveDraft(), saveDraftAnnotations() (+36 more)
 
 ### Community 1 - "Bridge Data Models"
-Cohesion: 0.10
-Nodes (26): AttachmentContent, AttachmentInfo, Draft, DraftAttachment, DraftRef, EmailContent, EmailSummary, Folder (+18 more)
+Cohesion: 0.11
+Nodes (23): AttachmentContent, AttachmentInfo, EmailContent, EmailSummary, Folder, MessagePage, SavedDraft, SearchCriteria (+15 more)
 
 ### Community 2 - "Manifest Metadata"
 Cohesion: 0.05
@@ -92,7 +87,7 @@ Nodes (38): default, description, title, type, default, description, title, type
 
 ### Community 4 - "Draft Save Pipeline"
 Cohesion: 0.12
-Nodes (32): Address, AppendData, Client, draftAddresses, draftMetadata, observedDoneContext, Header, InlineHeader (+24 more)
+Nodes (32): Draft, draftAddresses, draftMetadata, observedDoneContext, Header, InlineHeader, InlineWriter, appendDraft() (+24 more)
 
 ### Community 5 - "MIME Parsing"
 Cohesion: 0.13
@@ -103,28 +98,28 @@ Cohesion: 0.09
 Nodes (31): Repository Checkout Action, CI Workflow, Go Formatting Vetting and Race Tests, GoReleaser Action, Go Vulnerability Check Action, Vulnerability Check Job, MCPB Manifest Validation, Release Job (+23 more)
 
 ### Community 7 - "Draft Protocol Tests"
-Cohesion: 0.13
-Nodes (26): AppendOptions, draftTestSession, ExpungeWriter, draftMessageID(), AppendData, seedDraftMailbox(), TestProtocolSavedDraftMaximumAttachmentIsReadable(), TestProtocolSavedDraftMaximumNonASCIIBodyIsReadable() (+18 more)
+Cohesion: 0.12
+Nodes (36): AppendOptions, CapSet, draftMessageID(), AppendData, Client, T, seedDraftMailbox(), TestProtocolSavedDraftMaximumAttachmentIsReadable() (+28 more)
 
 ### Community 8 - "Content Protocol Tests"
-Cohesion: 0.17
-Nodes (27): CapSet, Client, T, liveRef(), multipartMessage(), seedContentInbox(), TestProtocolAttachmentRoundtrip(), TestProtocolAttachmentSizeCapRefusal() (+19 more)
+Cohesion: 0.45
+Nodes (11): Client, T, liveRef(), multipartMessage(), seedContentInbox(), TestProtocolAttachmentRoundtrip(), TestProtocolAttachmentSizeCapRefusal(), TestProtocolGetEmail() (+3 more)
 
 ### Community 9 - "MCP Content Tests"
-Cohesion: 0.20
-Nodes (24): T, msgRefArgs(), TestGetAttachmentImageContent(), TestGetAttachmentTextBase64(), TestGetEmailBodiesInContentOnly(), TestGetEmailNoTextBodies(), TestGetEmailRequiresUIDValidity(), TestListAttachmentsTool() (+16 more)
+Cohesion: 0.14
+Nodes (33): T, msgRefArgs(), TestGetAttachmentImageContent(), TestGetAttachmentTextBase64(), TestGetEmailBodiesInContentOnly(), TestGetEmailNoTextBodies(), TestGetEmailRequiresUIDValidity(), TestListAttachmentsTool() (+25 more)
 
 ### Community 10 - "Runtime Client Setup"
-Cohesion: 0.19
-Nodes (19): tlsConfigHolder, Config, Client, Context, New(), buildTLSConfig(), certProbePaths(), Certificate (+11 more)
+Cohesion: 0.30
+Nodes (14): buildTLSConfig(), certProbePaths(), Certificate, parsePEMCertificates(), pinnedTLSConfig(), T, selfSignedCert(), TestExplicitCertBeatsProbe() (+6 more)
 
 ### Community 11 - "Draft Tool and Tests"
-Cohesion: 0.16
-Nodes (19): Bridge, CallToolResult, Draft, registerSaveDraft(), saveDraftAnnotations(), decodeSavedDraft(), T, TestSaveDraftToolAnnotations() (+11 more)
+Cohesion: 0.18
+Nodes (27): append_client(), cleanup_and_exit(), configure_claude(), configure_client(), configure_clients(), configure_codex(), die(), download_release() (+19 more)
 
 ### Community 12 - "Runtime Configuration"
-Cohesion: 0.32
-Nodes (15): main(), Security, isLoopback(), Load(), env(), T, TestLoadAllowInsecure(), TestLoadDefaults() (+7 more)
+Cohesion: 0.11
+Nodes (29): DraftAttachment, DraftRef, draftTestSession, tlsConfigHolder, main(), Config, Security, ExpungeWriter (+21 more)
 
 ### Community 13 - "Product Documentation"
 Cohesion: 0.22
@@ -134,25 +129,33 @@ Nodes (11): IMAP, Model Context Protocol (MCP), Proton Mail Bridge, Baryon MCP, 
 Cohesion: 0.62
 Nodes (6): Client, T, stallingServer(), TestCancellationReleasesSlot(), testClient(), TestStalledHandshakeReleasesSlot()
 
+### Community 16 - "Context Type"
+Cohesion: 0.28
+Nodes (15): Assert-Windows(), Find-Certificate(), Get-ClientAdapters(), Get-ExpectedHash(), Get-Release(), Get-WindowsPowerShellPath(), Install-Certificate(), Install-Credentials() (+7 more)
+
+### Community 17 - "Draft Type"
+Cohesion: 0.43
+Nodes (4): fail(), run_installer(), run_macos_installer(), install_test.sh script
+
 ## Knowledge Gaps
-- **79 isolated node(s):** `Go Vulnerability Check Action`, `Baryon MCP Command Entrypoint`, `Platform Release Archives`, `SHA-256 Release Checksums`, `Repository Guidance Pointer` (+74 more)
+- **80 isolated node(s):** `github.com/combor/baryon-mcp`, `Client`, `Client`, `getAttachmentOutput`, `listEmailsInput` (+75 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **14 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **2 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `New()` connect `Runtime Client Setup` to `Content Protocol Tests`, `Bridge Data Models`, `Runtime Configuration`, `MCP Content Tests`?**
-  _High betweenness centrality (0.090) - this node is a cross-community bridge._
-- **Why does `RegisterAll()` connect `Read Tool Registration` to `MCP Content Tests`, `Draft Tool and Tests`, `Runtime Configuration`?**
-  _High betweenness centrality (0.082) - this node is a cross-community bridge._
-- **Why does `fakeBridge` connect `Bridge Data Models` to `MCP Content Tests`?**
-  _High betweenness centrality (0.079) - this node is a cross-community bridge._
-- **Are the 12 inferred relationships involving `newTestSession()` (e.g. with `TestGetAttachmentImageContent()` and `TestGetAttachmentTextBase64()`) actually correct?**
-  _`newTestSession()` has 12 INFERRED edges - model-reasoned connections that need verification._
-- **Are the 6 inferred relationships involving `callTool()` (e.g. with `TestGetAttachmentImageContent()` and `TestGetAttachmentTextBase64()`) actually correct?**
-  _`callTool()` has 6 INFERRED edges - model-reasoned connections that need verification._
-- **Are the 3 inferred relationships involving `buildDraftMessage()` (e.g. with `TestBuildDraftMessageGeneratesMessageID()` and `TestBuildDraftMessagePlainHTMLAndAttachment()`) actually correct?**
-  _`buildDraftMessage()` has 3 INFERRED edges - model-reasoned connections that need verification._
-- **What connects `Go Vulnerability Check Action`, `Baryon MCP Command Entrypoint`, `Platform Release Archives` to the rest of the system?**
-  _79 weakly-connected nodes found - possible documentation gaps or missing edges._
+- **Why does `New()` connect `Runtime Configuration` to `MCP Content Tests`, `Runtime Client Setup`, `Draft Protocol Tests`?**
+  _High betweenness centrality (0.155) - this node is a cross-community bridge._
+- **Why does `fakeBridge` connect `Bridge Data Models` to `MCP Content Tests`, `Draft Save Pipeline`?**
+  _High betweenness centrality (0.119) - this node is a cross-community bridge._
+- **Why does `Draft` connect `Draft Save Pipeline` to `Read Tool Registration`, `Bridge Data Models`, `Runtime Configuration`?**
+  _High betweenness centrality (0.096) - this node is a cross-community bridge._
+- **Are the 16 inferred relationships involving `newTestSession()` (e.g. with `TestGetAttachmentImageContent()` and `TestGetAttachmentTextBase64()`) actually correct?**
+  _`newTestSession()` has 16 INFERRED edges - model-reasoned connections that need verification._
+- **Are the 9 inferred relationships involving `callTool()` (e.g. with `TestGetAttachmentImageContent()` and `TestGetAttachmentTextBase64()`) actually correct?**
+  _`callTool()` has 9 INFERRED edges - model-reasoned connections that need verification._
+- **Are the 9 inferred relationships involving `startMemServerWithOptions()` (e.g. with `seedDraftMailbox()` and `TestProtocolSaveDraftAppendFailurePreservesPreviousDraft()`) actually correct?**
+  _`startMemServerWithOptions()` has 9 INFERRED edges - model-reasoned connections that need verification._
+- **What connects `github.com/combor/baryon-mcp`, `Client`, `Client` to the rest of the system?**
+  _80 weakly-connected nodes found - possible documentation gaps or missing edges._

@@ -30,21 +30,62 @@ Building from source requires Go 1.26.5 or later.
 
 ## Installation
 
-Download the appropriate asset from the [latest release](https://github.com/combor/baryon-mcp/releases/latest):
+### Claude Desktop
 
-- **Claude Desktop:** open the `.mcpb` bundle for your platform and enter the Bridge settings when prompted.
-- **Other stdio MCP clients:** extract the platform archive and configure the `baryon-mcp` binary manually.
+Download the `.mcpb` bundle for your platform from the [latest release](https://github.com/combor/baryon-mcp/releases/latest), open it, and enter the Bridge settings when prompted.
+
+### Claude Code and Codex
+
+The installers download the latest platform archive, verify its SHA-256 checksum, install a credential-backed launcher, and configure installed Claude Code and Codex CLIs.
+
+macOS or Linux:
+
+```sh
+(
+  set -e
+  installer=$(mktemp "${TMPDIR:-/tmp}/baryon-install.XXXXXX")
+  trap 'rm -f "$installer"' EXIT
+  curl -fsSL https://raw.githubusercontent.com/combor/baryon-mcp/main/scripts/install.sh -o "$installer"
+  sh "$installer"
+)
+```
+
+Windows PowerShell:
+
+```powershell
+$installer = Join-Path ([IO.Path]::GetTempPath()) ("baryon-install-{0}.ps1" -f [Guid]::NewGuid().ToString("N"))
+try {
+  Invoke-WebRequest -UseBasicParsing -Uri https://raw.githubusercontent.com/combor/baryon-mcp/main/scripts/install.ps1 -OutFile $installer
+  powershell.exe -NoProfile -ExecutionPolicy Bypass -File $installer
+} finally {
+  Remove-Item -Force $installer
+}
+```
+
+Use `--client claude` or `--client codex` on macOS/Linux, or `-Client claude` / `-Client codex` on Windows, to configure only one client. Existing `baryon` entries are preserved unless `--force-client-config` or `-ForceClientConfig` is supplied.
+
+Credential storage:
+
+- macOS: Login Keychain service `baryon-mcp`; the launcher contains no secrets
+- Linux: separate mode-600 files under `$XDG_CONFIG_HOME/baryon-mcp` (default `~/.config/baryon-mcp`)
+- Windows: current-user DPAPI encryption under `%LOCALAPPDATA%\baryon-mcp`
+
+### Manual setup and other clients
+
+Download and extract the platform archive from the [latest release](https://github.com/combor/baryon-mcp/releases/latest), then point your client at the `baryon-mcp` binary using the configuration below.
 
 Releases provide a universal macOS build, Linux builds for amd64 and arm64, and a Windows amd64 build.
 
 ## Configuration
 
-In Proton Mail Bridge:
+The installers prompt for these values. For manual setup, in Proton Mail Bridge:
 
 1. Copy the IMAP username and Bridge-generated password from the mailbox settings. Do not use your Proton account password.
 2. Export `cert.pem` from **Settings → Advanced settings → Export TLS certificates**.
 
 Add the standalone binary to your MCP client, adapting the surrounding config format if needed:
+
+Manual client configuration may store these values as plaintext. Prefer the installer-generated launcher when using Claude Code or Codex.
 
 ```json
 {

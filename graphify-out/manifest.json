@@ -165,9 +165,9 @@
     "semantic_hash": "f0bed0aa4f4aaa301f1355faf707a60f"
   },
   ".github/workflows/ci.yml": {
-    "mtime": 1784241595.4582818,
-    "ast_hash": "4bd358ea9b8977847765def8443ad4a8",
-    "semantic_hash": "4bd358ea9b8977847765def8443ad4a8"
+    "mtime": 1784410954.2195997,
+    "ast_hash": "9ccf4d163d4ba193414bee63516b116d",
+    "semantic_hash": ""
   },
   ".goreleaser.yml": {
     "mtime": 1784291933.7069452,
@@ -185,8 +185,28 @@
     "semantic_hash": "07fa27feb86885dc14b0f15a2b8b7789"
   },
   "README.md": {
-    "mtime": 1784406430.2162876,
-    "ast_hash": "afdb3c679a3c637a01ec0f0995c8ad8b",
-    "semantic_hash": "afdb3c679a3c637a01ec0f0995c8ad8b"
+    "mtime": 1784414664.6582284,
+    "ast_hash": "64590ed751e16cd3fde87477a39803cb",
+    "semantic_hash": ""
+  },
+  "scripts/install.ps1": {
+    "mtime": 1784412817.1153994,
+    "ast_hash": "7d20f93695cfce9f767841e13450dc45",
+    "semantic_hash": ""
+  },
+  "scripts/install.sh": {
+    "mtime": 1784414717.4143598,
+    "ast_hash": "2b8e266f23940b2df035ee6b29197561",
+    "semantic_hash": ""
+  },
+  "scripts/install_test.sh": {
+    "mtime": 1784414717.5479243,
+    "ast_hash": "e89f867874e5a96fa3bba0760e355a75",
+    "semantic_hash": ""
+  },
+  "scripts/install_windows_test.ps1": {
+    "mtime": 1784412318.1384196,
+    "ast_hash": "7f2038681e2fb202b3d026b1ca5dbf8e",
+    "semantic_hash": ""
   }
 }

@@ -1,1 +1,22 @@
-{"0": "Read Tool Registration", "1": "Bridge Data Models", "2": "Manifest Metadata", "3": "Manifest Configuration", "4": "Draft Save Pipeline", "5": "MIME Parsing", "6": "CI and Repository Guidance", "7": "Draft Protocol Tests", "8": "Content Protocol Tests", "9": "MCP Content Tests", "10": "Runtime Client Setup", "11": "Draft Tool and Tests", "12": "Runtime Configuration", "13": "Product Documentation", "14": "Client Session Tests", "15": "MCPB Packaging", "16": "Context Type", "17": "Draft Type", "18": "Address Type", "19": "Append Data Type", "20": "Bridge Client Type", "21": "Time Type", "22": "Client Reference", "23": "IMAP Session Type", "24": "Test Type", "25": "MCP Server Type", "26": "Tool Annotation Type", "27": "Tool Result Type", "28": "Repository Root"}
+{
+  "0": "Read Tool Registration",
+  "1": "Bridge Data Models",
+  "2": "Manifest Metadata",
+  "3": "Manifest Configuration",
+  "4": "Draft Save Pipeline",
+  "5": "MIME Parsing",
+  "6": "CI and Repository Guidance",
+  "7": "Draft Protocol Tests",
+  "8": "Content Protocol Tests",
+  "9": "MCP Content Tests",
+  "10": "Runtime Client Setup",
+  "11": "Draft Tool and Tests",
+  "12": "Runtime Configuration",
+  "13": "Product Documentation",
+  "14": "Client Session Tests",
+  "15": "MCPB Packaging",
+  "16": "Context Type",
+  "17": "Draft Type",
+  "18": "Address Type",
+  "28": "Repository Root"
+}

@@ -33,6 +33,10 @@ jobs:
           go-version-file: 'go.mod'
           cache: true
       - run: go mod download
+      - name: Shell installer checks
+        run: |
+          shellcheck scripts/install.sh scripts/install_test.sh
+          bash scripts/install_test.sh
       - name: gofmt
         run: |
           unformatted="$(gofmt -l .)"
@@ -42,11 +46,22 @@ jobs:
       - name: Validate MCPB manifest
         run: npx --yes @anthropic-ai/mcpb validate manifest.json
 
+  installer-windows:
+    name: Windows Installer
+    runs-on: windows-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - name: Test PowerShell installer
+        shell: powershell
+        run: .\scripts\install_windows_test.ps1
+
   release:
     name: Release
     needs:
       - test
       - govulncheck
+      - installer-windows
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     timeout-minutes: 15
