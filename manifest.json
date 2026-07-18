@@ -9,7 +9,7 @@
   "author": {
     "name": "Piotr Komborski"
   },
-  "license": "MIT",
+  "license": "BSD-3-Clause",
   "repository": {
     "type": "git",
     "url": "https://github.com/combor/baryon-mcp"

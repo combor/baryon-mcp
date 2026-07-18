@@ -155,9 +155,9 @@
     "semantic_hash": "7033cf2ea2954db2bb45c28fa8c2cde2"
   },
   "manifest.json": {
-    "mtime": 1784397750.3666174,
-    "ast_hash": "dc735eabff8690339b7da2f38f103de2",
-    "semantic_hash": "dc735eabff8690339b7da2f38f103de2"
+    "mtime": 1784407927.9164834,
+    "ast_hash": "8cd21e7e49d9d8a11f97f83cfcb79f66",
+    "semantic_hash": "8cd21e7e49d9d8a11f97f83cfcb79f66"
   },
   "scripts/mcpb-pack.sh": {
     "mtime": 1784241566.77593,
@@ -185,8 +185,8 @@
     "semantic_hash": "07fa27feb86885dc14b0f15a2b8b7789"
   },
   "README.md": {
-    "mtime": 1784397888.9335918,
-    "ast_hash": "d2ea14cf3d153b757d6485f067aee8ab",
-    "semantic_hash": "d2ea14cf3d153b757d6485f067aee8ab"
+    "mtime": 1784406430.2162876,
+    "ast_hash": "afdb3c679a3c637a01ec0f0995c8ad8b",
+    "semantic_hash": "afdb3c679a3c637a01ec0f0995c8ad8b"
   }
 }
