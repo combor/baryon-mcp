@@ -37,3 +37,9 @@ go.work.sum
 # Build artifacts
 /baryon-mcp
 /dist/
+
+# Graphify local cache and machine-specific state
+/graphify-out/cache/
+/graphify-out/cost.json
+/graphify-out/.graphify_python
+/graphify-out/.graphify_root
