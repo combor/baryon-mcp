@@ -127,6 +127,30 @@ func TestBuildDraftMessageRejectsInvalidAttachmentContentType(t *testing.T) {
 	}
 }
 
+func TestDraftLimits(t *testing.T) {
+	if MaxDraftAttachments != 100 {
+		t.Errorf("MaxDraftAttachments = %d, want 100", MaxDraftAttachments)
+	}
+	if MaxDraftAttachmentBytes != 25_000_000 {
+		t.Errorf("MaxDraftAttachmentBytes = %d, want 25000000", MaxDraftAttachmentBytes)
+	}
+	if MaxDraftAttachmentTotalBytes != 25_000_000 {
+		t.Errorf("MaxDraftAttachmentTotalBytes = %d, want 25000000", MaxDraftAttachmentTotalBytes)
+	}
+	if MaxDraftMessageBytes != 70*1024*1024 {
+		t.Errorf("MaxDraftMessageBytes = %d, want %d", MaxDraftMessageBytes, 70*1024*1024)
+	}
+}
+
+func TestValidateDraftMessageSize(t *testing.T) {
+	if err := validateDraftMessageSize(MaxDraftMessageBytes - 1); err != nil {
+		t.Fatalf("message below limit rejected: %v", err)
+	}
+	if err := validateDraftMessageSize(MaxDraftMessageBytes); err == nil || !strings.Contains(err.Error(), "below") {
+		t.Fatalf("error = %v, want strict generated-message limit", err)
+	}
+}
+
 func TestValidateDraftRejectsInvalidAndOversizedInput(t *testing.T) {
 	tests := []struct {
 		name  string

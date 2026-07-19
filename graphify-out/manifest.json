@@ -40,9 +40,9 @@
     "semantic_hash": "21d4689d624a0b8868a034b3bda533f7"
   },
   "internal/bridgeclient/drafts.go": {
-    "mtime": 1784400740.6867702,
-    "ast_hash": "6d63438f31c7630013e6a3a2d2c19c93",
-    "semantic_hash": "6d63438f31c7630013e6a3a2d2c19c93"
+    "mtime": 1784464551.4828506,
+    "ast_hash": "570ad4af9061fcd9a7dca9d023dc7db8",
+    "semantic_hash": ""
   },
   "internal/bridgeclient/drafts_protocol_test.go": {
     "mtime": 1784398874.847611,
@@ -50,9 +50,9 @@
     "semantic_hash": "057823a45573527b281e598ac228abb9"
   },
   "internal/bridgeclient/drafts_test.go": {
-    "mtime": 1784400707.4651675,
-    "ast_hash": "9d9b9af3daf3680aa446f852d41b63a1",
-    "semantic_hash": "9d9b9af3daf3680aa446f852d41b63a1"
+    "mtime": 1784464480.002021,
+    "ast_hash": "0acca91f68311b77166e0fbf248fb741",
+    "semantic_hash": ""
   },
   "internal/bridgeclient/imapserver_test.go": {
     "mtime": 1784397648.6479154,
@@ -100,9 +100,9 @@
     "semantic_hash": "a56a4f998d4ca5fd835d118c4460d54a"
   },
   "internal/mcptools/attachments.go": {
-    "mtime": 1784397750.1002424,
-    "ast_hash": "3163a9919e8406163fc1476f42f0b6be",
-    "semantic_hash": "3163a9919e8406163fc1476f42f0b6be"
+    "mtime": 1784464569.7296832,
+    "ast_hash": "4c8efd9d2dfebecdddbc2e3571ae823c",
+    "semantic_hash": ""
   },
   "internal/mcptools/content_test.go": {
     "mtime": 1784397511.728823,
@@ -110,14 +110,14 @@
     "semantic_hash": "9037b066ca4225e35d0b3d31b0b10516"
   },
   "internal/mcptools/drafts.go": {
-    "mtime": 1784400824.1823206,
-    "ast_hash": "7cc348c733be9708ec474bdef79e6d53",
-    "semantic_hash": "7cc348c733be9708ec474bdef79e6d53"
+    "mtime": 1784464569.5886116,
+    "ast_hash": "3583092f497abb9e1b5fc43158632e1c",
+    "semantic_hash": ""
   },
   "internal/mcptools/drafts_test.go": {
-    "mtime": 1784400706.9354024,
-    "ast_hash": "62763a79a75e3e3e1876fadb06e542fc",
-    "semantic_hash": "62763a79a75e3e3e1876fadb06e542fc"
+    "mtime": 1784464576.4551008,
+    "ast_hash": "e26d8af80a964ddd5400170d8cbce4c7",
+    "semantic_hash": ""
   },
   "internal/mcptools/email.go": {
     "mtime": 1784397529.5473046,
@@ -155,9 +155,9 @@
     "semantic_hash": "7033cf2ea2954db2bb45c28fa8c2cde2"
   },
   "manifest.json": {
-    "mtime": 1784407927.9164834,
-    "ast_hash": "8cd21e7e49d9d8a11f97f83cfcb79f66",
-    "semantic_hash": "8cd21e7e49d9d8a11f97f83cfcb79f66"
+    "mtime": 1784464588.1687622,
+    "ast_hash": "c62523efc3503bc9118c94ac3feb4d98",
+    "semantic_hash": ""
   },
   "scripts/mcpb-pack.sh": {
     "mtime": 1784241566.77593,
@@ -185,8 +185,8 @@
     "semantic_hash": "07fa27feb86885dc14b0f15a2b8b7789"
   },
   "README.md": {
-    "mtime": 1784414664.6582284,
-    "ast_hash": "64590ed751e16cd3fde87477a39803cb",
+    "mtime": 1784464587.3519378,
+    "ast_hash": "406a190c0bb12a4f3c7f0fdacafedede",
     "semantic_hash": ""
   },
   "scripts/install.ps1": {

@@ -109,9 +109,9 @@ func TestSaveDraftToolRejectsPartialReferenceAndInvalidBase64(t *testing.T) {
 }
 
 func TestToDraftStopsAtTotalAttachmentLimit(t *testing.T) {
-	encoded := base64.StdEncoding.EncodeToString(make([]byte, bridgeclient.MaxDraftAttachmentBytes))
-	attachments := make([]draftAttachmentInput, 0, 6)
-	for i := 0; i < 5; i++ {
+	encoded := base64.StdEncoding.EncodeToString(make([]byte, bridgeclient.MaxDraftAttachmentTotalBytes/2+1))
+	attachments := make([]draftAttachmentInput, 0, 3)
+	for i := 0; i < 2; i++ {
 		attachments = append(attachments, draftAttachmentInput{
 			Filename:      "data.bin",
 			ContentType:   "application/octet-stream",

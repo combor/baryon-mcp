@@ -17,7 +17,7 @@ Baryon runs over stdio and connects to Bridge over IMAP. Draft saving is its onl
 | `search_emails` | Search by text, sender, recipient, subject, date, or unread state |
 | `get_email` | Read metadata, Bcc recipients, plain-text/HTML bodies, and attachment metadata |
 | `list_attachments` | List attachment metadata without downloading content |
-| `get_attachment` | Fetch one attachment, up to 1 MiB decoded |
+| `get_attachment` | Fetch one attachment, up to 25 MB decoded |
 | `save_draft` | Create or replace a draft with text, HTML, Bcc recipients, and attachments |
 
 ## Requirements
@@ -129,8 +129,9 @@ A replacement gets a new UID. Baryon appends it before removing the previous dra
 Draft limits:
 
 - 50,000 characters each for plain-text and HTML bodies
-- 10 regular attachments
-- 1 MiB decoded per attachment; 4 MiB decoded in total
+- 100 regular attachments
+- 25 MB decoded per attachment and in total
+- Generated RFC822/MIME message below 70 MiB
 - Standard base64 content only; file paths and inline CID attachments are not supported
 
 ## Security

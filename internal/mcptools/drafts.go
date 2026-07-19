@@ -13,7 +13,7 @@ import (
 type draftAttachmentInput struct {
 	Filename      string `json:"filename" jsonschema:"attachment filename"`
 	ContentType   string `json:"content_type" jsonschema:"MIME content type, for example application/pdf"`
-	ContentBase64 string `json:"content_base64" jsonschema:"standard base64-encoded attachment bytes"`
+	ContentBase64 string `json:"content_base64" jsonschema:"standard base64-encoded attachment bytes; up to 25 MB decoded"`
 }
 
 type saveDraftInput struct {
@@ -24,7 +24,7 @@ type saveDraftInput struct {
 	Subject     string                 `json:"subject,omitempty"`
 	TextBody    string                 `json:"text_body,omitempty" jsonschema:"plain-text body, up to 50000 characters"`
 	HTMLBody    string                 `json:"html_body,omitempty" jsonschema:"optional HTML alternative, up to 50000 characters"`
-	Attachments []draftAttachmentInput `json:"attachments,omitempty" jsonschema:"regular file attachments; at most 10"`
+	Attachments []draftAttachmentInput `json:"attachments,omitempty" jsonschema:"regular file attachments; at most 100 and 25 MB decoded in total"`
 	UID         uint32                 `json:"uid,omitempty" jsonschema:"existing draft UID to replace; requires uidvalidity"`
 	UIDValidity uint32                 `json:"uidvalidity,omitempty" jsonschema:"Drafts UIDVALIDITY accompanying uid"`
 }

@@ -1,16 +1,16 @@
-# Graph Report - baryon-mcp  (2026-07-18)
+# Graph Report - baryon-mcp  (2026-07-19)
 
 ## Corpus Check
-- 40 files · ~23,084 words
+- 40 files · ~23,256 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 486 nodes · 949 edges · 20 communities (18 shown, 2 thin omitted)
-- Extraction: 88% EXTRACTED · 12% INFERRED · 0% AMBIGUOUS · INFERRED: 112 edges (avg confidence: 0.8)
+- 489 nodes · 956 edges · 20 communities (18 shown, 2 thin omitted)
+- Extraction: 88% EXTRACTED · 12% INFERRED · 0% AMBIGUOUS · INFERRED: 113 edges (avg confidence: 0.8)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `22c3b942`
+- Built from commit: `7d4b788a`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -70,8 +70,8 @@
 ## Communities (20 total, 2 thin omitted)
 
 ### Community 0 - "Read Tool Registration"
-Cohesion: 0.07
-Nodes (44): Bridge, Server, registerGetAttachment(), registerListAttachments(), Server, ToolAnnotations, registerSaveDraft(), saveDraftAnnotations() (+36 more)
+Cohesion: 0.08
+Nodes (36): Bridge, Server, registerGetAttachment(), registerListAttachments(), Server, registerGetEmail(), toAttachmentMetas(), fetchPage() (+28 more)
 
 ### Community 1 - "Bridge Data Models"
 Cohesion: 0.11
@@ -86,8 +86,8 @@ Cohesion: 0.05
 Nodes (38): default, description, title, type, default, description, title, type (+30 more)
 
 ### Community 4 - "Draft Save Pipeline"
-Cohesion: 0.12
-Nodes (32): Draft, draftAddresses, draftMetadata, observedDoneContext, Header, InlineHeader, InlineWriter, appendDraft() (+24 more)
+Cohesion: 0.11
+Nodes (35): Draft, draftAddresses, draftMetadata, observedDoneContext, Header, InlineHeader, InlineWriter, appendDraft() (+27 more)
 
 ### Community 5 - "MIME Parsing"
 Cohesion: 0.13
@@ -106,8 +106,8 @@ Cohesion: 0.45
 Nodes (11): Client, T, liveRef(), multipartMessage(), seedContentInbox(), TestProtocolAttachmentRoundtrip(), TestProtocolAttachmentSizeCapRefusal(), TestProtocolGetEmail() (+3 more)
 
 ### Community 9 - "MCP Content Tests"
-Cohesion: 0.14
-Nodes (33): T, msgRefArgs(), TestGetAttachmentImageContent(), TestGetAttachmentTextBase64(), TestGetEmailBodiesInContentOnly(), TestGetEmailNoTextBodies(), TestGetEmailRequiresUIDValidity(), TestListAttachmentsTool() (+25 more)
+Cohesion: 0.11
+Nodes (41): T, msgRefArgs(), TestGetAttachmentImageContent(), TestGetAttachmentTextBase64(), TestGetEmailBodiesInContentOnly(), TestGetEmailNoTextBodies(), TestGetEmailRequiresUIDValidity(), TestListAttachmentsTool() (+33 more)
 
 ### Community 10 - "Runtime Client Setup"
 Cohesion: 0.30
@@ -146,11 +146,11 @@ Nodes (4): fail(), run_installer(), run_macos_installer(), install_test.sh scrip
 _Questions this graph is uniquely positioned to answer:_
 
 - **Why does `New()` connect `Runtime Configuration` to `MCP Content Tests`, `Runtime Client Setup`, `Draft Protocol Tests`?**
-  _High betweenness centrality (0.155) - this node is a cross-community bridge._
+  _High betweenness centrality (0.156) - this node is a cross-community bridge._
 - **Why does `fakeBridge` connect `Bridge Data Models` to `MCP Content Tests`, `Draft Save Pipeline`?**
-  _High betweenness centrality (0.119) - this node is a cross-community bridge._
-- **Why does `Draft` connect `Draft Save Pipeline` to `Read Tool Registration`, `Bridge Data Models`, `Runtime Configuration`?**
-  _High betweenness centrality (0.096) - this node is a cross-community bridge._
+  _High betweenness centrality (0.120) - this node is a cross-community bridge._
+- **Why does `Draft` connect `Draft Save Pipeline` to `MCP Content Tests`, `Runtime Configuration`, `Bridge Data Models`?**
+  _High betweenness centrality (0.099) - this node is a cross-community bridge._
 - **Are the 16 inferred relationships involving `newTestSession()` (e.g. with `TestGetAttachmentImageContent()` and `TestGetAttachmentTextBase64()`) actually correct?**
   _`newTestSession()` has 16 INFERRED edges - model-reasoned connections that need verification._
 - **Are the 9 inferred relationships involving `callTool()` (e.g. with `TestGetAttachmentImageContent()` and `TestGetAttachmentTextBase64()`) actually correct?**

@@ -87,7 +87,7 @@
     { "name": "search_emails", "description": "Search messages by text, sender, recipient, subject, date range, or unread state" },
     { "name": "get_email", "description": "Read one message's metadata, text bodies, and attachment list" },
     { "name": "list_attachments", "description": "List a message's attachments without transferring content" },
-    { "name": "get_attachment", "description": "Fetch one attachment (up to 1 MiB decoded)" },
+    { "name": "get_attachment", "description": "Fetch one attachment (up to 25 MB decoded)" },
     { "name": "save_draft", "description": "Create or replace a draft with plain text, optional HTML, and bounded base64 attachments" }
   ]
 }

@@ -21,11 +21,13 @@ const (
 	protonBridgeInternalIDDomain = "protonmail.internalid"
 
 	// MaxDraftAttachments bounds multipart fan-out and tool input size.
-	MaxDraftAttachments = 10
-	// MaxDraftAttachmentBytes bounds one decoded attachment.
-	MaxDraftAttachmentBytes = 1024 * 1024
-	// MaxDraftAttachmentTotalBytes bounds all decoded attachments together.
-	MaxDraftAttachmentTotalBytes = 4 * 1024 * 1024
+	MaxDraftAttachments = 100
+	// MaxDraftAttachmentBytes bounds one decoded attachment in decimal MB.
+	MaxDraftAttachmentBytes = 25_000_000
+	// MaxDraftAttachmentTotalBytes bounds all decoded attachments together in decimal MB.
+	MaxDraftAttachmentTotalBytes = 25_000_000
+	// MaxDraftMessageBytes is the exclusive limit for the generated RFC822/MIME message.
+	MaxDraftMessageBytes = 70 * 1024 * 1024
 	// MaxDraftBodyChars bounds each decoded text body.
 	MaxDraftBodyChars = 50_000
 )
@@ -112,10 +114,10 @@ func validateDraft(draft Draft) (draftAddresses, error) {
 		if len(attachment.Data) > MaxDraftAttachmentBytes {
 			return addresses, fmt.Errorf("attachment %q is %d bytes, above the %d byte limit", attachment.Filename, len(attachment.Data), MaxDraftAttachmentBytes)
 		}
+		if total > MaxDraftAttachmentTotalBytes-len(attachment.Data) {
+			return addresses, fmt.Errorf("attachments total %d bytes, above the %d byte limit", total+len(attachment.Data), MaxDraftAttachmentTotalBytes)
+		}
 		total += len(attachment.Data)
-	}
-	if total > MaxDraftAttachmentTotalBytes {
-		return addresses, fmt.Errorf("attachments total %d bytes, above the %d byte limit", total, MaxDraftAttachmentTotalBytes)
 	}
 	return addresses, nil
 }
@@ -355,6 +357,13 @@ func appendDraft(cli *imapclient.Client, folder string, raw []byte, now time.Tim
 	return data, nil
 }
 
+func validateDraftMessageSize(size int) error {
+	if size >= MaxDraftMessageBytes {
+		return fmt.Errorf("generated draft message is %d bytes; it must be below the %d byte limit", size, MaxDraftMessageBytes)
+	}
+	return nil
+}
+
 func removePreviousDraft(cli *imapclient.Client, uid uint32) error {
 	uids := imap.UIDSetNum(imap.UID(uid))
 	if err := cli.Store(uids, &imap.StoreFlags{
@@ -420,6 +429,9 @@ func (c *Client) SaveDraft(ctx context.Context, draft Draft) (*SavedDraft, error
 		now := time.Now()
 		raw, err := buildDraftMessage(draft, addresses, metadata, now)
 		if err != nil {
+			return err
+		}
+		if err := validateDraftMessageSize(len(raw)); err != nil {
 			return err
 		}
 		appended, err := appendDraft(cli, folder, raw, now)
