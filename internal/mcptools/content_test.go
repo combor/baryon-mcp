@@ -14,7 +14,7 @@ func msgRefArgs() map[string]any {
 	return map[string]any{"folder": "INBOX", "uid": 7, "uidvalidity": 42}
 }
 
-func TestGetEmailBodiesInContentOnly(t *testing.T) {
+func TestGetEmailBodiesInStructuredOutput(t *testing.T) {
 	fake := &fakeBridge{email: &bridgeclient.EmailContent{
 		Summary: bridgeclient.EmailSummary{Subject: "hello", From: []string{"a@x"}, Bcc: []string{"hidden@x"}},
 		Plain:   &bridgeclient.TextBody{Text: "plain body", Truncated: true},
@@ -29,19 +29,17 @@ func TestGetEmailBodiesInContentOnly(t *testing.T) {
 	if res.IsError {
 		t.Fatalf("errored: %v", res.Content)
 	}
-	if len(res.Content) != 2 {
-		t.Fatalf("content blocks = %d, want plain + html", len(res.Content))
-	}
-	first := res.Content[0].(*mcp.TextContent).Text
-	second := res.Content[1].(*mcp.TextContent).Text
-	if !strings.Contains(first, "plain body") || !strings.Contains(second, "<p>html</p>") {
-		t.Errorf("blocks wrong or misordered: %q, %q", first, second)
+	if len(res.Content) != 0 {
+		t.Errorf("content blocks = %d, want none (bodies duplicated on the wire): %#v", len(res.Content), res.Content)
 	}
 
 	raw, _ := json.Marshal(res.StructuredContent)
 	var out getEmailOutput
 	if err := json.Unmarshal(raw, &out); err != nil {
 		t.Fatal(err)
+	}
+	if out.PlainBody != "plain body" || out.HTMLBody != "<p>html</p>" {
+		t.Errorf("bodies = %q, %q", out.PlainBody, out.HTMLBody)
 	}
 	if !out.TextTruncated || !out.CharsetFallback || out.HTMLTruncated {
 		t.Errorf("flags = %+v", out)
@@ -52,9 +50,6 @@ func TestGetEmailBodiesInContentOnly(t *testing.T) {
 	if len(out.Attachments) != 1 || out.Attachments[0].Filename != "a.pdf" {
 		t.Errorf("attachments = %+v", out.Attachments)
 	}
-	if strings.Contains(string(raw), "plain body") {
-		t.Error("body leaked into structured output")
-	}
 }
 
 func TestGetEmailNoTextBodies(t *testing.T) {
@@ -63,8 +58,25 @@ func TestGetEmailNoTextBodies(t *testing.T) {
 	}}
 	session := newTestSession(t, fake)
 	res := callTool(t, session, "get_email", msgRefArgs())
-	if len(res.Content) != 1 || !strings.Contains(res.Content[0].(*mcp.TextContent).Text, "no text bodies") {
+	if len(res.Content) != 0 {
 		t.Errorf("content = %#v", res.Content)
+	}
+	raw, _ := json.Marshal(res.StructuredContent)
+	if strings.Contains(string(raw), "plain_body") || strings.Contains(string(raw), "html_body") {
+		t.Errorf("absent bodies should be omitted: %s", raw)
+	}
+}
+
+func TestLegacyProtocol(t *testing.T) {
+	for version, want := range map[string]bool{
+		"2024-11-05": true,
+		"2025-03-26": true,
+		"2025-06-18": false,
+		"2025-11-25": false,
+	} {
+		if got := legacyProtocol(version); got != want {
+			t.Errorf("legacyProtocol(%q) = %v, want %v", version, got, want)
+		}
 	}
 }
 
@@ -110,9 +122,13 @@ func TestGetAttachmentImageContent(t *testing.T) {
 	if img.MIMEType != "image/png" || len(img.Data) != 3 {
 		t.Errorf("image = %+v", img)
 	}
+	raw, _ := json.Marshal(res.StructuredContent)
+	if strings.Contains(string(raw), "data_base64") {
+		t.Errorf("image bytes doubled into structured output: %s", raw)
+	}
 }
 
-func TestGetAttachmentTextBase64(t *testing.T) {
+func TestGetAttachmentBase64InStructuredOutput(t *testing.T) {
 	fake := &fakeBridge{attachment: &bridgeclient.AttachmentContent{
 		Filename: "doc.pdf", ContentType: "application/pdf", EncodedSize: 12, Data: []byte("PDFDATA"),
 	}}
@@ -120,14 +136,16 @@ func TestGetAttachmentTextBase64(t *testing.T) {
 	args := msgRefArgs()
 	args["index"] = 0
 	res := callTool(t, session, "get_attachment", args)
-	text := res.Content[0].(*mcp.TextContent).Text
-	if !strings.Contains(text, "doc.pdf") || !strings.Contains(text, "UERGREFUQQ==") {
-		t.Errorf("text block = %q", text)
+	if len(res.Content) != 0 {
+		t.Errorf("content = %#v, want none", res.Content)
 	}
 	raw, _ := json.Marshal(res.StructuredContent)
 	var out getAttachmentOutput
 	if err := json.Unmarshal(raw, &out); err != nil {
 		t.Fatal(err)
+	}
+	if out.Filename != "doc.pdf" || out.DataBase64 != "UERGREFUQQ==" {
+		t.Errorf("out = %+v", out)
 	}
 	if out.DecodedSizeBytes != 7 {
 		t.Errorf("out = %+v", out)

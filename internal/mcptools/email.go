@@ -49,6 +49,16 @@ func toAttachmentMetas(in []bridgeclient.AttachmentInfo) []attachmentMeta {
 	return out
 }
 
+// structuredContent arrived in spec 2025-06-18; older peers read only content blocks.
+func legacyProtocol(version string) bool {
+	return version == "2024-11-05" || version == "2025-03-26"
+}
+
+func legacyContent(req *mcp.CallToolRequest) bool {
+	p := req.Session.InitializeParams()
+	return p != nil && legacyProtocol(p.ProtocolVersion)
+}
+
 type getEmailOutput struct {
 	UID             uint32           `json:"uid"`
 	UIDValidity     uint32           `json:"uidvalidity"`
@@ -61,6 +71,8 @@ type getEmailOutput struct {
 	Seen            bool             `json:"seen"`
 	Flagged         bool             `json:"flagged,omitempty"`
 	Answered        bool             `json:"answered,omitempty"`
+	PlainBody       string           `json:"plain_body,omitempty" jsonschema:"decoded plain text body"`
+	HTMLBody        string           `json:"html_body,omitempty" jsonschema:"decoded html body"`
 	TextTruncated   bool             `json:"text_truncated,omitempty" jsonschema:"plain text body was cut short"`
 	HTMLTruncated   bool             `json:"html_truncated,omitempty" jsonschema:"html body was cut short"`
 	CharsetFallback bool             `json:"charset_fallback,omitempty" jsonschema:"a body used an unknown charset; undecodable bytes were replaced"`
@@ -70,7 +82,7 @@ type getEmailOutput struct {
 func registerGetEmail(server *mcp.Server, bridge bridgeclient.Bridge) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "get_email",
-		Description: "Read one message: envelope metadata and attachment list as structured output, with the decoded plain-text and HTML bodies returned as content blocks.",
+		Description: "Read one message: envelope metadata, decoded plain-text and HTML bodies, and attachment list, all as structured output.",
 		Annotations: readOnly("Get email"),
 	}, func(ctx context.Context, req *mcp.CallToolRequest, in messageRef) (*mcp.CallToolResult, getEmailOutput, error) {
 		if err := in.validate(); err != nil {
@@ -99,22 +111,30 @@ func registerGetEmail(server *mcp.Server, bridge bridgeclient.Bridge) {
 			out.Date = s.Date.Format(time.RFC3339)
 		}
 
-		// Bodies go in Content only; putting them in the structured output too
-		// would double the payload (the SDK serializes Out into content when unset).
-		var blocks []mcp.Content
+		// Bodies go in the structured output: clients that prefer structuredContent drop text blocks.
 		if email.Plain != nil {
+			out.PlainBody = email.Plain.Text
 			out.TextTruncated = email.Plain.Truncated
 			out.CharsetFallback = out.CharsetFallback || email.Plain.CharsetFallback
-			blocks = append(blocks, &mcp.TextContent{Text: "Plain text body:\n" + email.Plain.Text})
 		}
 		if email.HTML != nil {
+			out.HTMLBody = email.HTML.Text
 			out.HTMLTruncated = email.HTML.Truncated
 			out.CharsetFallback = out.CharsetFallback || email.HTML.CharsetFallback
-			blocks = append(blocks, &mcp.TextContent{Text: "HTML body:\n" + email.HTML.Text})
 		}
-		if len(blocks) == 0 {
-			blocks = append(blocks, &mcp.TextContent{Text: "This message has no text bodies; see the attachments list in the structured output."})
+		// Empty non-nil Content stops the SDK echoing the JSON into a redundant text block.
+		res := &mcp.CallToolResult{Content: []mcp.Content{}}
+		if legacyContent(req) {
+			if email.Plain != nil {
+				res.Content = append(res.Content, &mcp.TextContent{Text: "Plain text body:\n" + email.Plain.Text})
+			}
+			if email.HTML != nil {
+				res.Content = append(res.Content, &mcp.TextContent{Text: "HTML body:\n" + email.HTML.Text})
+			}
+			if len(res.Content) == 0 {
+				res.Content = append(res.Content, &mcp.TextContent{Text: "This message has no text bodies; see the attachments list in the structured output."})
+			}
 		}
-		return &mcp.CallToolResult{Content: blocks}, out, nil
+		return res, out, nil
 	})
 }
