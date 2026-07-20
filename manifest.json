@@ -5,7 +5,7 @@
   "display_name": "Baryon — Proton Mail via Bridge",
   "version": "0.1.0",
   "description": "Read Proton Mail and save drafts through your local Proton Mail Bridge.",
-  "long_description": "Baryon exposes your Proton Mail mailbox to MCP clients as seven tools: list folders, list/search emails, read a message, list and fetch attachments, and create or replace drafts. It talks IMAP to the Proton Mail Bridge running on your machine over loopback only, authenticates Bridge by pinning its TLS certificate, and keeps draft saving as its only mailbox write capability — it cannot send, move, or generally delete messages or change flags.",
+  "long_description": "Baryon exposes your Proton Mail mailbox to MCP clients as seven tools: list folders, list/search emails, read a message, list and fetch attachments, and create or replace drafts. It talks IMAP to the Proton Mail Bridge running on your machine over loopback only, authenticates Bridge by pinning its TLS certificate, and keeps draft saving as its only mailbox write capability — it cannot send, move, or generally delete messages or change flags. To attach files, save_draft can read paths on your machine, optionally restricted to a folder you choose.",
   "author": {
     "name": "Piotr Komborski"
   },
@@ -28,7 +28,8 @@
         "PROTON_BRIDGE_IMAP_PORT": "${user_config.bridge_imap_port}",
         "PROTON_BRIDGE_IMAP_SECURITY": "${user_config.bridge_imap_security}",
         "PROTON_BRIDGE_TLS_CERT": "${user_config.bridge_tls_cert}",
-        "PROTON_BRIDGE_ALLOW_INSECURE": "${user_config.bridge_allow_insecure}"
+        "PROTON_BRIDGE_ALLOW_INSECURE": "${user_config.bridge_allow_insecure}",
+        "BARYON_ATTACHMENT_ROOTS": "${user_config.attachment_root}"
       }
     }
   },
@@ -76,6 +77,11 @@
       "title": "Allow unverified connection",
       "description": "Connect without verifying Bridge's TLS certificate. Only enable if you understand that another local process could impersonate Bridge and capture the Bridge password.",
       "default": false
+    },
+    "attachment_root": {
+      "type": "directory",
+      "title": "Attachment folder restriction",
+      "description": "When set, save_draft may only attach files from inside this folder. Leave empty to allow any file your user account can read."
     }
   },
   "compatibility": {
@@ -88,6 +94,6 @@
     { "name": "get_email", "description": "Read one message's metadata, text bodies, and attachment list" },
     { "name": "list_attachments", "description": "List a message's attachments without transferring content" },
     { "name": "get_attachment", "description": "Fetch one attachment (up to 25 MB decoded)" },
-    { "name": "save_draft", "description": "Create or replace a draft with plain text, optional HTML, and bounded base64 attachments" }
+    { "name": "save_draft", "description": "Create or replace a draft with plain text, optional HTML, and attachments from base64 or local file paths" }
   ]
 }

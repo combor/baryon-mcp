@@ -87,7 +87,7 @@ func (f *fakeBridge) SaveDraft(ctx context.Context, draft bridgeclient.Draft) (*
 func newTestSession(t *testing.T, bridge bridgeclient.Bridge) *mcp.ClientSession {
 	t.Helper()
 	server := mcp.NewServer(&mcp.Implementation{Name: "baryon-mcp", Version: "test"}, nil)
-	RegisterAll(server, bridge)
+	RegisterAll(server, bridge, Options{})
 
 	serverTransport, clientTransport := mcp.NewInMemoryTransports()
 	if _, err := server.Connect(context.Background(), serverTransport, nil); err != nil {

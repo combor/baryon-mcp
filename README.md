@@ -18,7 +18,7 @@ Baryon runs over stdio and connects to Bridge over IMAP. Draft saving is its onl
 | `get_email` | Read metadata, Bcc recipients, plain-text/HTML bodies, and attachment metadata |
 | `list_attachments` | List attachment metadata without downloading content |
 | `get_attachment` | Fetch one attachment, up to 25 MB decoded |
-| `save_draft` | Create or replace a draft with text, HTML, Bcc recipients, and attachments |
+| `save_draft` | Create or replace a draft with text, HTML, Bcc recipients, and attachments from base64 or local file paths |
 
 ## Requirements
 
@@ -111,6 +111,7 @@ Manual client configuration may store these values as plaintext. Prefer the inst
 | `PROTON_BRIDGE_IMAP_SECURITY` | `starttls` | `starttls` or `tls` |
 | `PROTON_BRIDGE_TLS_CERT` | auto-detect | Path to Bridge's exported certificate |
 | `PROTON_BRIDGE_ALLOW_INSECURE` | `false` | Disable certificate verification; see Security |
+| `BARYON_ATTACHMENT_ROOTS` | unrestricted | Directories (path-list separated) that `save_draft` `content_path` may read from |
 
 Without an explicit or auto-discovered certificate, Baryon refuses to start unless `PROTON_BRIDGE_ALLOW_INSECURE=true`.
 
@@ -124,15 +125,18 @@ For reading mail:
 
 For drafts, omit `uid` and `uidvalidity` to create one. To replace an existing draft, pass both values and submit the complete desired state. Read the current draft with `get_email` and fetch any attachments first so recipients, bodies, and files can be retained.
 
+Each attachment supplies its content in exactly one of two ways: `content_base64` (inline bytes, with `filename` and `content_type` required) or `content_path` (an absolute path to a regular file on the machine running Baryon, read when the draft is saved; `filename` defaults to the path's basename and `content_type` is inferred from the extension). All attachments are read and validated before anything touches the mailbox, so a missing or unreadable file fails the call without creating or replacing a draft.
+
 A replacement gets a new UID. Baryon appends it before removing the previous draft and returns a warning if cleanup is incomplete. Drafts with genuine reply-thread `In-Reply-To` or `References` metadata are refused because Bridge cannot preserve it through IMAP replacement.
 
 Draft limits:
 
 - 50,000 characters each for plain-text and HTML bodies
 - 100 regular attachments
-- 25 MB decoded per attachment and in total
+- 25 MB decoded per attachment and in total, across both content sources
 - Generated RFC822/MIME message below 70 MiB
-- Standard base64 content only; file paths and inline CID attachments are not supported
+- Standard base64 for inline content; inline CID attachments are not supported
+- `content_path` is not available on Windows (resolving attacker-planted junctions could leak SMB credentials); use `content_base64` there
 
 ## Security
 
@@ -140,6 +144,7 @@ Draft limits:
 - Bridge's TLS certificate is pinned by default. Insecure mode allows a local process to impersonate Bridge and capture its generated password.
 - Read tools select mailboxes read-only and do not mark messages as read.
 - `save_draft` is the only mutating tool. There are no send, move, general delete, or flag-changing tools.
+- `save_draft` `content_path` reads local files with the server's privileges. It refuses anything but regular files (resolving symlinks first), and `BARYON_ATTACHMENT_ROOTS` optionally restricts which directories it may read; unset means any file your user account can read.
 - MCP clients can access message content and attachments; connect only clients you trust.
 
 ## Development

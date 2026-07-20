@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 )
@@ -39,6 +40,9 @@ type Config struct {
 	// certificate. Explicit opt-in only; accepts the risk that another
 	// local process squats Bridge's port and captures the credentials.
 	AllowInsecure bool
+	// AttachmentRoots limits save_draft content_path reads to these
+	// symlink-resolved directories; empty means any readable file.
+	AttachmentRoots []string
 }
 
 // Addr returns the host:port dial address.
@@ -110,6 +114,33 @@ func Load(rawGetenv func(string) string) (*Config, error) {
 	if cfg.TLSCertPath != "" {
 		if _, err := os.Stat(cfg.TLSCertPath); err != nil {
 			return nil, fmt.Errorf("PROTON_BRIDGE_TLS_CERT: %w", err)
+		}
+	}
+
+	if v := getenv("BARYON_ATTACHMENT_ROOTS"); v != "" {
+		for _, root := range filepath.SplitList(v) {
+			if root == "" {
+				continue
+			}
+			if !filepath.IsAbs(root) {
+				return nil, fmt.Errorf("BARYON_ATTACHMENT_ROOTS entry %q is not an absolute path", root)
+			}
+			resolved, err := filepath.EvalSymlinks(root)
+			if err != nil {
+				return nil, fmt.Errorf("BARYON_ATTACHMENT_ROOTS: %w", err)
+			}
+			info, err := os.Stat(resolved)
+			if err != nil {
+				return nil, fmt.Errorf("BARYON_ATTACHMENT_ROOTS: %w", err)
+			}
+			if !info.IsDir() {
+				return nil, fmt.Errorf("BARYON_ATTACHMENT_ROOTS entry %q is not a directory", root)
+			}
+			cfg.AttachmentRoots = append(cfg.AttachmentRoots, resolved)
+		}
+		// Fail closed: a set but entry-less restriction must not mean unrestricted.
+		if len(cfg.AttachmentRoots) == 0 {
+			return nil, fmt.Errorf("BARYON_ATTACHMENT_ROOTS %q contains no directory entries", v)
 		}
 	}
 

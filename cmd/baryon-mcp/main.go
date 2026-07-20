@@ -37,7 +37,7 @@ func main() {
 		Title:   "Baryon — Proton Mail via Bridge",
 		Version: version,
 	}, nil)
-	mcptools.RegisterAll(server, bridge)
+	mcptools.RegisterAll(server, bridge, mcptools.Options{AttachmentRoots: cfg.AttachmentRoots})
 
 	if err := server.Run(context.Background(), &mcp.StdioTransport{}); err != nil {
 		log.Fatalf("baryon-mcp: %v", err)

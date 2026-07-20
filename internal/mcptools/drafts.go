@@ -2,7 +2,6 @@ package mcptools
 
 import (
 	"context"
-	"encoding/base64"
 	"fmt"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -11,9 +10,10 @@ import (
 )
 
 type draftAttachmentInput struct {
-	Filename      string `json:"filename" jsonschema:"attachment filename"`
-	ContentType   string `json:"content_type" jsonschema:"MIME content type, for example application/pdf"`
-	ContentBase64 string `json:"content_base64" jsonschema:"standard base64-encoded attachment bytes; up to 25 MB decoded"`
+	Filename      string  `json:"filename,omitempty" jsonschema:"attachment filename; required with content_base64, defaults to the content_path basename"`
+	ContentType   string  `json:"content_type,omitempty" jsonschema:"MIME content type, for example application/pdf; required with content_base64, inferred from the filename extension with content_path"`
+	ContentBase64 *string `json:"content_base64,omitempty" jsonschema:"standard base64-encoded attachment bytes; up to 25 MB decoded"`
+	ContentPath   *string `json:"content_path,omitempty" jsonschema:"absolute path to a regular file on the server's machine, read when the draft is saved; each attachment takes exactly one of content_base64 or content_path; not available on Windows"`
 }
 
 type saveDraftInput struct {
@@ -50,7 +50,7 @@ func saveDraftAnnotations() *mcp.ToolAnnotations {
 	}
 }
 
-func toDraft(in saveDraftInput) (bridgeclient.Draft, error) {
+func toDraft(in saveDraftInput, attachmentRoots []string) (bridgeclient.Draft, error) {
 	if (in.UID == 0) != (in.UIDValidity == 0) {
 		return bridgeclient.Draft{}, fmt.Errorf("uid and uidvalidity must be supplied together when replacing a draft")
 	}
@@ -73,36 +73,35 @@ func toDraft(in saveDraftInput) (bridgeclient.Draft, error) {
 	}
 	totalAttachmentBytes := 0
 	for i, attachment := range in.Attachments {
-		if len(attachment.ContentBase64) > base64.StdEncoding.EncodedLen(bridgeclient.MaxDraftAttachmentBytes) {
-			return bridgeclient.Draft{}, fmt.Errorf("attachment %d encoded content is above the %d byte decoded limit", i, bridgeclient.MaxDraftAttachmentBytes)
+		if (attachment.ContentBase64 == nil) == (attachment.ContentPath == nil) {
+			return bridgeclient.Draft{}, fmt.Errorf("attachment %d must set exactly one of content_base64 or content_path", i)
 		}
-		data, err := base64.StdEncoding.DecodeString(attachment.ContentBase64)
+		var loaded bridgeclient.DraftAttachment
+		var err error
+		if attachment.ContentPath != nil {
+			loaded, err = readAttachmentFile(i, attachment, attachmentRoots)
+		} else {
+			loaded, err = decodeAttachment(i, attachment)
+		}
 		if err != nil {
-			return bridgeclient.Draft{}, fmt.Errorf("attachment %d content_base64 is invalid: %w", i, err)
+			return bridgeclient.Draft{}, err
 		}
-		// EncodedLen is shared by several neighboring decoded sizes, so enforce
-		// the exact per-attachment limit after decoding as well.
-		if len(data) > bridgeclient.MaxDraftAttachmentBytes {
-			return bridgeclient.Draft{}, fmt.Errorf("attachment %d decoded content is above the %d byte limit", i, bridgeclient.MaxDraftAttachmentBytes)
-		}
-		totalAttachmentBytes += len(data)
+		totalAttachmentBytes += len(loaded.Data)
 		if totalAttachmentBytes > bridgeclient.MaxDraftAttachmentTotalBytes {
 			return bridgeclient.Draft{}, fmt.Errorf("attachments total %d bytes, above the %d byte limit", totalAttachmentBytes, bridgeclient.MaxDraftAttachmentTotalBytes)
 		}
-		draft.Attachments = append(draft.Attachments, bridgeclient.DraftAttachment{
-			Filename: attachment.Filename, ContentType: attachment.ContentType, Data: data,
-		})
+		draft.Attachments = append(draft.Attachments, loaded)
 	}
 	return draft, nil
 }
 
-func registerSaveDraft(server *mcp.Server, bridge bridgeclient.Bridge) {
+func registerSaveDraft(server *mcp.Server, bridge bridgeclient.Bridge, attachmentRoots []string) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "save_draft",
-		Description: "Create a complete Proton Mail draft, or replace an existing draft when uid and uidvalidity are provided. Supports plain text, an optional HTML alternative, and bounded base64 attachments. Updating appends the replacement before removing the old UID; drafts with reply-thread headers are refused because Bridge cannot preserve them. Inspect warning if cleanup was incomplete.",
+		Description: "Create a complete Proton Mail draft, or replace an existing draft when uid and uidvalidity are provided. Supports plain text, an optional HTML alternative, and bounded attachments supplied either inline as base64 (content_base64) or as an absolute path to a local file that the server reads at save time (content_path). Updating appends the replacement before removing the old UID; drafts with reply-thread headers are refused because Bridge cannot preserve them. Inspect warning if cleanup was incomplete.",
 		Annotations: saveDraftAnnotations(),
 	}, func(ctx context.Context, req *mcp.CallToolRequest, in saveDraftInput) (*mcp.CallToolResult, saveDraftOutput, error) {
-		draft, err := toDraft(in)
+		draft, err := toDraft(in, attachmentRoots)
 		if err != nil {
 			return nil, saveDraftOutput{}, err
 		}

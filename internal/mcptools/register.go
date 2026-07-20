@@ -8,15 +8,22 @@ import (
 	"github.com/combor/baryon-mcp/internal/bridgeclient"
 )
 
+// Options carries tool settings taken from server configuration.
+type Options struct {
+	// AttachmentRoots limits save_draft content_path reads to these
+	// symlink-resolved directories; empty means unrestricted.
+	AttachmentRoots []string
+}
+
 // RegisterAll adds every tool to the server, backed by bridge.
-func RegisterAll(server *mcp.Server, bridge bridgeclient.Bridge) {
+func RegisterAll(server *mcp.Server, bridge bridgeclient.Bridge, opts Options) {
 	registerListFolders(server, bridge)
 	registerListEmails(server, bridge)
 	registerSearchEmails(server, bridge)
 	registerGetEmail(server, bridge)
 	registerListAttachments(server, bridge)
 	registerGetAttachment(server, bridge)
-	registerSaveDraft(server, bridge)
+	registerSaveDraft(server, bridge, opts.AttachmentRoots)
 }
 
 // readOnly returns the annotations shared by all baryon-mcp tools.

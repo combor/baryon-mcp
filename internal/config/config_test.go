@@ -120,6 +120,32 @@ func TestLoadUnresolvedTemplateTreatedAsUnset(t *testing.T) {
 	}
 }
 
+func TestLoadAttachmentRoots(t *testing.T) {
+	dirA, dirB := t.TempDir(), t.TempDir()
+	m := validEnv()
+	m["BARYON_ATTACHMENT_ROOTS"] = dirA + string(os.PathListSeparator) + dirB
+	cfg, err := Load(env(m))
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	resolvedA, _ := filepath.EvalSymlinks(dirA)
+	resolvedB, _ := filepath.EvalSymlinks(dirB)
+	if len(cfg.AttachmentRoots) != 2 || cfg.AttachmentRoots[0] != resolvedA || cfg.AttachmentRoots[1] != resolvedB {
+		t.Errorf("AttachmentRoots = %v, want resolved %q and %q", cfg.AttachmentRoots, resolvedA, resolvedB)
+	}
+
+	file := filepath.Join(dirA, "not-a-dir.txt")
+	if err := os.WriteFile(file, []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, bad := range []string{"relative/dir", filepath.Join(dirA, "missing"), file, string(os.PathListSeparator)} {
+		m["BARYON_ATTACHMENT_ROOTS"] = bad
+		if _, err := Load(env(m)); err == nil || !strings.Contains(err.Error(), "BARYON_ATTACHMENT_ROOTS") {
+			t.Errorf("root %q: got err %v, want rejection", bad, err)
+		}
+	}
+}
+
 func TestLoadTLSCertPath(t *testing.T) {
 	m := validEnv()
 	m["PROTON_BRIDGE_TLS_CERT"] = filepath.Join(t.TempDir(), "missing.pem")
