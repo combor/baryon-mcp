@@ -34,5 +34,5 @@ jq --arg os "$platform" --arg entry "$entry" --arg ver "$version" \
    | .server.mcp_config.command = "${__dirname}/" + $entry' \
   manifest.json > "$dir/manifest.json"
 
-npx --yes @anthropic-ai/mcpb validate "$dir/manifest.json"
-npx --yes @anthropic-ai/mcpb pack "$dir" "dist/mcpb/baryon-mcp-$suffix.mcpb"
+npx --yes @anthropic-ai/mcpb@2.1.2 validate "$dir/manifest.json"
+npx --yes @anthropic-ai/mcpb@2.1.2 pack "$dir" "dist/mcpb/baryon-mcp-$suffix.mcpb"
