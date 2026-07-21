@@ -94,6 +94,6 @@
     { "name": "get_email", "description": "Read one message's metadata, text bodies, and attachment list" },
     { "name": "list_attachments", "description": "List a message's attachments without transferring content" },
     { "name": "get_attachment", "description": "Fetch one attachment (up to 25 MB decoded)" },
-    { "name": "save_draft", "description": "Create or replace a draft with plain text, optional HTML, and attachments from base64 or local file paths" }
+    { "name": "save_draft", "description": "Create or replace a draft, including a threaded reply, with plain text, optional HTML, and attachments from base64 or local file paths" }
   ]
 }

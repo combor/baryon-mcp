@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -91,6 +92,60 @@ func TestSaveDraftToolMapsUpdateAndCleanupWarning(t *testing.T) {
 	out := decodeSavedDraft(t, res)
 	if out.ReplacedUID != 9 || out.PreviousDraftRemoved || !strings.Contains(out.Warning, "old draft") {
 		t.Errorf("output = %+v", out)
+	}
+}
+
+func TestSaveDraftToolMapsThreadHeaders(t *testing.T) {
+	fake := &fakeBridge{savedDraft: &bridgeclient.SavedDraft{Folder: "Drafts", UID: 9, UIDValidity: 42}}
+	res := callTool(t, newTestSession(t, fake), "save_draft", map[string]any{
+		"from": "alice@example.org", "to": []string{"bob@example.org"},
+		"subject": "Re: plans", "text_body": "reply",
+		"in_reply_to": []string{"parent@example.org"},
+		"references":  []string{"root@example.org", "parent@example.org"},
+	})
+	if res.IsError {
+		t.Fatalf("tool errored: %v", res.Content)
+	}
+	if !slices.Equal(fake.gotDraft.InReplyTo, []string{"parent@example.org"}) {
+		t.Errorf("in-reply-to = %v", fake.gotDraft.InReplyTo)
+	}
+	if !slices.Equal(fake.gotDraft.References, []string{"root@example.org", "parent@example.org"}) {
+		t.Errorf("references = %v", fake.gotDraft.References)
+	}
+}
+
+// An empty array asks to detach a draft from its thread; an absent field asks to
+// leave it alone. Collapsing the two would silently ignore one of the requests.
+func TestSaveDraftToolDistinguishesEmptyThreadHeadersFromAbsent(t *testing.T) {
+	tests := []struct {
+		name    string
+		args    map[string]any
+		wantNil bool
+	}{
+		{name: "explicit empty clears", args: map[string]any{
+			"from": "alice@example.org", "in_reply_to": []string{}, "references": []string{},
+		}, wantNil: false},
+		{name: "absent keeps", args: map[string]any{"from": "alice@example.org"}, wantNil: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fake := &fakeBridge{savedDraft: &bridgeclient.SavedDraft{Folder: "Drafts", UID: 9, UIDValidity: 42}}
+			res := callTool(t, newTestSession(t, fake), "save_draft", tt.args)
+			if res.IsError {
+				t.Fatalf("tool errored: %v", res.Content)
+			}
+			for field, got := range map[string][]string{
+				"in_reply_to": fake.gotDraft.InReplyTo,
+				"references":  fake.gotDraft.References,
+			} {
+				if (got == nil) != tt.wantNil {
+					t.Errorf("%s nil = %v, want %v", field, got == nil, tt.wantNil)
+				}
+				if len(got) != 0 {
+					t.Errorf("%s = %v, want no ids", field, got)
+				}
+			}
+		})
 	}
 }
 

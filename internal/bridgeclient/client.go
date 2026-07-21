@@ -51,6 +51,10 @@ type DraftRef struct {
 
 // Draft is the complete desired state of a saved draft. Replace is nil when
 // creating a draft and identifies the previous version when updating one.
+// InReplyTo and References thread the draft into a conversation; both accept
+// identifiers with or without angle brackets. On a replacement nil keeps the
+// previous draft's header and a non-nil empty slice removes it, so the two must
+// not be conflated.
 type Draft struct {
 	From        string
 	To          []string
@@ -59,6 +63,8 @@ type Draft struct {
 	Subject     string
 	TextBody    string
 	HTMLBody    string
+	InReplyTo   []string
+	References  []string
 	Attachments []DraftAttachment
 	Replace     *DraftRef
 }

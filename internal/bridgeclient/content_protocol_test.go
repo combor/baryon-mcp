@@ -98,6 +98,45 @@ func TestProtocolGetEmail(t *testing.T) {
 	}
 }
 
+func TestProtocolGetEmailExposesThreadHeaders(t *testing.T) {
+	raw := "From: bob@example.org\r\n" +
+		"To: me@example.org\r\n" +
+		"Subject: Re: plans\r\n" +
+		"Message-ID: <parent@example.org>\r\n" +
+		"X-Pm-Internal-Id: bridge-id\r\n" +
+		"In-Reply-To: <root@example.org>\r\n" +
+		"References: <root@example.org> <bridge-id@protonmail.internalid>\r\n" +
+		"\r\nbody\r\n"
+	c := startMemServer(t, func(u *imapmemserver.User) {
+		if err := u.Create("INBOX", nil); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := u.Append("INBOX", bytes.NewReader([]byte(raw)), &imap.AppendOptions{}); err != nil {
+			t.Fatal(err)
+		}
+	})
+	uid, uidval := liveRef(t, c)
+
+	email, err := c.GetEmail(context.Background(), "INBOX", uid, uidval)
+	if err != nil {
+		t.Fatalf("GetEmail: %v", err)
+	}
+	if email.MessageID != "parent@example.org" {
+		t.Errorf("message-id = %q", email.MessageID)
+	}
+	if len(email.InReplyTo) != 1 || email.InReplyTo[0] != "root@example.org" {
+		t.Errorf("in-reply-to = %v", email.InReplyTo)
+	}
+	// Bridge's self-reference would poison a reply's References chain.
+	if len(email.References) != 1 || email.References[0] != "root@example.org" {
+		t.Errorf("references = %v", email.References)
+	}
+	// The added header section must not disturb body decoding.
+	if email.Plain == nil || strings.TrimSpace(email.Plain.Text) != "body" {
+		t.Errorf("plain = %+v", email.Plain)
+	}
+}
+
 func TestProtocolGetEmailWrongUIDValidity(t *testing.T) {
 	c := seedContentInbox(t)
 	uid, uidval := liveRef(t, c)

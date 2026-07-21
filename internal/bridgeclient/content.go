@@ -37,9 +37,14 @@ type AttachmentInfo struct {
 	EncodedSize uint32
 }
 
-// EmailContent is a full single-message view.
+// EmailContent is a full single-message view. MessageID, InReplyTo, and
+// References carry the identifiers a reply draft must quote to stay in the
+// conversation; identifiers are bare, with no angle brackets.
 type EmailContent struct {
 	Summary     EmailSummary
+	MessageID   string
+	InReplyTo   []string
+	References  []string
 	Plain       *TextBody
 	HTML        *TextBody
 	Attachments []AttachmentInfo
@@ -107,7 +112,8 @@ func (c *Client) GetEmail(ctx context.Context, folder string, uid, uidvalidity u
 			})
 		}
 
-		var sections []*imap.FetchItemBodySection
+		threadSection := threadHeaderSection()
+		sections := []*imap.FetchItemBodySection{threadSection}
 		for _, tp := range []*mailparse.TextPart{outline.Plain, outline.HTML} {
 			if tp == nil {
 				continue
@@ -117,9 +123,6 @@ func (c *Client) GetEmail(ctx context.Context, folder string, uid, uidvalidity u
 				Peek:    true,
 				Partial: &imap.SectionPartial{Offset: 0, Size: textPartCap},
 			})
-		}
-		if len(sections) == 0 {
-			return nil
 		}
 
 		msgs, err := cli.Fetch(imap.UIDSetNum(imap.UID(uid)), &imap.FetchOptions{
@@ -132,6 +135,13 @@ func (c *Client) GetEmail(ctx context.Context, folder string, uid, uidvalidity u
 		if len(msgs) == 0 {
 			return fmt.Errorf("message with uid %d disappeared while fetching its body", uid)
 		}
+
+		// A malformed identification header must not make a message unreadable.
+		thread, _ := parseThreadHeaders(msgs[0].FindBodySection(threadSection))
+		thread.fillFromEnvelope(msg.Envelope)
+		content.MessageID = thread.messageID
+		content.InReplyTo = thread.inReplyTo
+		content.References = thread.references
 
 		decode := func(tp *mailparse.TextPart) *TextBody {
 			raw, ok := findSection(msgs[0], tp.Path)

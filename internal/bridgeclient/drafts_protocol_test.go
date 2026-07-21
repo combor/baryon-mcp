@@ -295,47 +295,162 @@ func TestProtocolSaveDraftReplacementIgnoresBridgeSelfReference(t *testing.T) {
 	}
 }
 
-func TestProtocolSaveDraftReplacementRejectsThreadHeaders(t *testing.T) {
-	for _, tt := range []struct {
-		name    string
-		headers string
-	}{
-		{name: "In-Reply-To", headers: "In-Reply-To: <parent@example.org>\r\n"},
-		{name: "References", headers: "X-Pm-Internal-Id: bridge-draft-id\r\nReferences: <root@example.org> <bridge-draft-id@protonmail.internalid>\r\n"},
-	} {
-		t.Run(tt.name, func(t *testing.T) {
-			var ref DraftRef
-			client := startMemServerWithOptions(t, func(u *imapmemserver.User) {
-				if err := u.Create("Drafts", nil); err != nil {
-					t.Fatal(err)
-				}
-				raw := "From: alice@example.org\r\n" +
-					"Subject: reply\r\n" +
-					"Message-ID: <draft@example.org>\r\n" + tt.headers + "\r\nbody\r\n"
-				data, err := u.Append("Drafts", bytes.NewReader([]byte(raw)), &imap.AppendOptions{Flags: []imap.Flag{imap.FlagDraft}})
-				if err != nil {
-					t.Fatal(err)
-				}
-				ref = DraftRef{UID: uint32(data.UID), UIDValidity: data.UIDValidity}
-			}, draftTestCaps, func(session imapserver.Session) imapserver.Session {
-				return &draftTestSession{Session: session}
-			})
+func TestProtocolSaveDraftCreatesThreadedReply(t *testing.T) {
+	client := seedDraftMailbox(t, false)
+	saved, err := client.SaveDraft(context.Background(), Draft{
+		From:       "alice@example.org",
+		To:         []string{"bob@example.org"},
+		Subject:    "Re: plans",
+		TextBody:   "reply body",
+		InReplyTo:  []string{"<parent@example.org>"},
+		References: []string{"<root@example.org>", "<parent@example.org>"},
+	})
+	if err != nil {
+		t.Fatalf("SaveDraft: %v", err)
+	}
 
-			_, err := client.SaveDraft(context.Background(), Draft{
-				From: "alice@example.org", Subject: "edited reply", TextBody: "replacement", Replace: &ref,
-			})
-			if err == nil || !strings.Contains(err.Error(), "cannot preserve") {
-				t.Fatalf("error = %v, want reply-thread preservation refusal", err)
+	email, err := client.GetEmail(context.Background(), saved.Folder, saved.UID, saved.UIDValidity)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(email.InReplyTo, []string{"parent@example.org"}) {
+		t.Errorf("in-reply-to = %v", email.InReplyTo)
+	}
+	if !slices.Equal(email.References, []string{"root@example.org", "parent@example.org"}) {
+		t.Errorf("references = %v", email.References)
+	}
+	if email.MessageID == "" || email.MessageID == "parent@example.org" {
+		t.Errorf("reply message-id = %q, want its own identifier", email.MessageID)
+	}
+}
+
+func TestProtocolSaveDraftReplacementKeepsThreadHeaders(t *testing.T) {
+	seedReplyDraft := func(t *testing.T) (*Client, DraftRef) {
+		var ref DraftRef
+		client := startMemServerWithOptions(t, func(u *imapmemserver.User) {
+			if err := u.Create("Drafts", nil); err != nil {
+				t.Fatal(err)
 			}
-			page, err := client.ListMessages(context.Background(), "Drafts", SearchCriteria{}, 10, 0)
+			raw := "From: alice@example.org\r\n" +
+				"Subject: reply\r\n" +
+				"Message-ID: <draft@example.org>\r\n" +
+				"X-Pm-Internal-Id: bridge-draft-id\r\n" +
+				"In-Reply-To: <parent@example.org>\r\n" +
+				"References: <root@example.org> <parent@example.org> <bridge-draft-id@protonmail.internalid>\r\n" +
+				"\r\nbody\r\n"
+			data, err := u.Append("Drafts", bytes.NewReader([]byte(raw)), &imap.AppendOptions{Flags: []imap.Flag{imap.FlagDraft}})
 			if err != nil {
 				t.Fatal(err)
 			}
-			if page.Total != 1 || page.Emails[0].UID != ref.UID || page.Emails[0].Subject != "reply" {
-				t.Errorf("refused reply replacement mutated Drafts: %+v", page)
-			}
+			ref = DraftRef{UID: uint32(data.UID), UIDValidity: data.UIDValidity}
+		}, draftTestCaps, func(session imapserver.Session) imapserver.Session {
+			return &draftTestSession{Session: session}
 		})
+		return client, ref
 	}
+
+	t.Run("inherited when unstated", func(t *testing.T) {
+		client, ref := seedReplyDraft(t)
+		saved, err := client.SaveDraft(context.Background(), Draft{
+			From: "alice@example.org", Subject: "edited reply", TextBody: "replacement", Replace: &ref,
+		})
+		if err != nil {
+			t.Fatalf("SaveDraft: %v", err)
+		}
+		email, err := client.GetEmail(context.Background(), saved.Folder, saved.UID, saved.UIDValidity)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if email.MessageID != "draft@example.org" {
+			t.Errorf("message-id = %q, want the replaced draft's", email.MessageID)
+		}
+		if !slices.Equal(email.InReplyTo, []string{"parent@example.org"}) {
+			t.Errorf("in-reply-to = %v", email.InReplyTo)
+		}
+		// Bridge's own self-reference must not accumulate across replacements.
+		if !slices.Equal(email.References, []string{"root@example.org", "parent@example.org"}) {
+			t.Errorf("references = %v", email.References)
+		}
+	})
+
+	t.Run("counterpart survives a partial restatement", func(t *testing.T) {
+		client, ref := seedReplyDraft(t)
+		saved, err := client.SaveDraft(context.Background(), Draft{
+			From: "alice@example.org", Subject: "edited reply", TextBody: "replacement", Replace: &ref,
+			InReplyTo: []string{"parent@example.org"},
+		})
+		if err != nil {
+			t.Fatalf("SaveDraft: %v", err)
+		}
+		email, err := client.GetEmail(context.Background(), saved.Folder, saved.UID, saved.UIDValidity)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !slices.Equal(email.References, []string{"root@example.org", "parent@example.org"}) {
+			t.Errorf("references = %v, want the chain kept alongside the restated in-reply-to", email.References)
+		}
+	})
+
+	t.Run("removed when explicitly emptied", func(t *testing.T) {
+		client, ref := seedReplyDraft(t)
+		saved, err := client.SaveDraft(context.Background(), Draft{
+			From: "alice@example.org", Subject: "standalone", TextBody: "replacement", Replace: &ref,
+			InReplyTo: []string{}, References: []string{},
+		})
+		if err != nil {
+			t.Fatalf("SaveDraft: %v", err)
+		}
+		email, err := client.GetEmail(context.Background(), saved.Folder, saved.UID, saved.UIDValidity)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(email.InReplyTo) != 0 || len(email.References) != 0 {
+			t.Errorf("in-reply-to = %v, references = %v, want the draft detached from its thread", email.InReplyTo, email.References)
+		}
+		// Detaching must not cost the draft its identity.
+		if email.MessageID != "draft@example.org" {
+			t.Errorf("message-id = %q, want the replaced draft's", email.MessageID)
+		}
+	})
+
+	t.Run("one header removed while the other is kept", func(t *testing.T) {
+		client, ref := seedReplyDraft(t)
+		saved, err := client.SaveDraft(context.Background(), Draft{
+			From: "alice@example.org", Subject: "trimmed", TextBody: "replacement", Replace: &ref,
+			References: []string{},
+		})
+		if err != nil {
+			t.Fatalf("SaveDraft: %v", err)
+		}
+		email, err := client.GetEmail(context.Background(), saved.Folder, saved.UID, saved.UIDValidity)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(email.References) != 0 {
+			t.Errorf("references = %v, want them removed", email.References)
+		}
+		if !slices.Equal(email.InReplyTo, []string{"parent@example.org"}) {
+			t.Errorf("in-reply-to = %v, want the omitted header kept", email.InReplyTo)
+		}
+	})
+
+	t.Run("overridden when restated", func(t *testing.T) {
+		client, ref := seedReplyDraft(t)
+		saved, err := client.SaveDraft(context.Background(), Draft{
+			From: "alice@example.org", Subject: "moved", TextBody: "replacement", Replace: &ref,
+			InReplyTo: []string{"other@example.org"}, References: []string{"other@example.org"},
+		})
+		if err != nil {
+			t.Fatalf("SaveDraft: %v", err)
+		}
+		email, err := client.GetEmail(context.Background(), saved.Folder, saved.UID, saved.UIDValidity)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !slices.Equal(email.InReplyTo, []string{"other@example.org"}) || !slices.Equal(email.References, []string{"other@example.org"}) {
+			t.Errorf("in-reply-to = %v, references = %v", email.InReplyTo, email.References)
+		}
+	})
 }
 
 func TestProtocolSaveDraftRejectsMalformedThreadHeadersBeforeAppend(t *testing.T) {

@@ -127,12 +127,15 @@ For drafts, omit `uid` and `uidvalidity` to create one. To replace an existing d
 
 Each attachment supplies its content in exactly one of two ways: `content_base64` (inline bytes, with `filename` and `content_type` required) or `content_path` (an absolute path to a regular file on the machine running Baryon, read when the draft is saved; `filename` defaults to the path's basename and `content_type` is inferred from the extension). All attachments are read and validated before anything touches the mailbox, so a missing or unreadable file fails the call without creating or replacing a draft.
 
-A replacement gets a new UID. Baryon appends it before removing the previous draft and returns a warning if cleanup is incomplete. Drafts with genuine reply-thread `In-Reply-To` or `References` metadata are refused because Bridge cannot preserve it through IMAP replacement.
+To reply inside a thread rather than start a new conversation, read the message being answered with `get_email` and pass its `message_id` as `in_reply_to`, and its `references` followed by that same `message_id` as `references`. When the parent reports no `references`, use its `in_reply_to` in their place, as RFC 5322 section 3.6.4 prescribes. Angle brackets are optional on both, but each identifier must be a well-formed `id-left@id-right`: Baryon rejects anything it could not read back, rather than saving a draft that becomes unreplaceable. Baryon also strips the self-reference Bridge adds to `References`, so the chain it reports can be quoted as-is.
+
+A replacement gets a new UID. Baryon appends it before removing the previous draft and returns a warning if cleanup is incomplete. The replacement keeps the previous draft's `Message-ID`, plus whichever of its `In-Reply-To` and `References` the call omits. The two empty cases differ: omitting a field keeps the existing header, while passing an empty array removes it, detaching the draft from its thread.
 
 Draft limits:
 
 - 50,000 characters each for plain-text and HTML bodies
 - 100 regular attachments
+- 100 message ids each in `in_reply_to` and `references`, 512 bytes per identifier; a longer chain read from a message is trimmed to its most recent ids
 - 25 MB decoded per attachment and in total, across both content sources
 - Generated RFC822/MIME message below 70 MiB
 - Standard base64 for inline content; inline CID attachments are not supported
