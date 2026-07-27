@@ -68,6 +68,9 @@ type getEmailOutput struct {
 	Cc              []string         `json:"cc,omitempty"`
 	Bcc             []string         `json:"bcc,omitempty" jsonschema:"Bcc recipients; present when retained in the message envelope"`
 	Date            string           `json:"date,omitempty" jsonschema:"send date, RFC 3339"`
+	MessageID       string           `json:"message_id,omitempty" jsonschema:"RFC 5322 Message-ID without angle brackets; pass it as save_draft in_reply_to to reply in this thread"`
+	InReplyTo       []string         `json:"in_reply_to,omitempty" jsonschema:"Message-IDs this message replies to"`
+	References      []string         `json:"references,omitempty" jsonschema:"conversation chain; a reply repeats it followed by message_id as save_draft references"`
 	Seen            bool             `json:"seen"`
 	Flagged         bool             `json:"flagged,omitempty"`
 	Answered        bool             `json:"answered,omitempty"`
@@ -102,6 +105,9 @@ func registerGetEmail(server *mcp.Server, bridge bridgeclient.Bridge) {
 			To:          s.To,
 			Cc:          s.Cc,
 			Bcc:         s.Bcc,
+			MessageID:   email.MessageID,
+			InReplyTo:   email.InReplyTo,
+			References:  email.References,
 			Seen:        s.Seen,
 			Flagged:     s.Flagged,
 			Answered:    s.Answered,

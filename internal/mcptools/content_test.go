@@ -2,6 +2,7 @@ package mcptools
 
 import (
 	"encoding/json"
+	"slices"
 	"strings"
 	"testing"
 
@@ -49,6 +50,30 @@ func TestGetEmailBodiesInStructuredOutput(t *testing.T) {
 	}
 	if len(out.Attachments) != 1 || out.Attachments[0].Filename != "a.pdf" {
 		t.Errorf("attachments = %+v", out.Attachments)
+	}
+}
+
+func TestGetEmailExposesThreadHeaders(t *testing.T) {
+	fake := &fakeBridge{email: &bridgeclient.EmailContent{
+		Summary:    bridgeclient.EmailSummary{Subject: "Re: plans"},
+		MessageID:  "parent@example.org",
+		InReplyTo:  []string{"root@example.org"},
+		References: []string{"root@example.org"},
+	}}
+	res := callTool(t, newTestSession(t, fake), "get_email", msgRefArgs())
+	if res.IsError {
+		t.Fatalf("errored: %v", res.Content)
+	}
+	raw, _ := json.Marshal(res.StructuredContent)
+	var out getEmailOutput
+	if err := json.Unmarshal(raw, &out); err != nil {
+		t.Fatal(err)
+	}
+	if out.MessageID != "parent@example.org" {
+		t.Errorf("message_id = %q", out.MessageID)
+	}
+	if !slices.Equal(out.InReplyTo, []string{"root@example.org"}) || !slices.Equal(out.References, []string{"root@example.org"}) {
+		t.Errorf("in_reply_to = %v, references = %v", out.InReplyTo, out.References)
 	}
 }
 

@@ -18,8 +18,6 @@ import (
 )
 
 const (
-	protonBridgeInternalIDDomain = "protonmail.internalid"
-
 	// MaxDraftAttachments bounds multipart fan-out and tool input size.
 	MaxDraftAttachments = 100
 	// MaxDraftAttachmentBytes bounds one decoded attachment in decimal MB.
@@ -37,12 +35,6 @@ type draftAddresses struct {
 	to   []*mail.Address
 	cc   []*mail.Address
 	bcc  []*mail.Address
-}
-
-type draftMetadata struct {
-	messageID  string
-	inReplyTo  []string
-	references []string
 }
 
 func parseDraftContentType(index int, contentType string) (string, map[string]string, error) {
@@ -122,7 +114,7 @@ func validateDraft(draft Draft) (draftAddresses, error) {
 	return addresses, nil
 }
 
-func draftHeader(draft Draft, addresses draftAddresses, metadata draftMetadata, now time.Time) (messageMail.Header, error) {
+func draftHeader(draft Draft, addresses draftAddresses, thread threadHeaders, now time.Time) (messageMail.Header, error) {
 	var header messageMail.Header
 	header.SetDate(now)
 	header.SetAddressList("From", addresses.from)
@@ -130,10 +122,16 @@ func draftHeader(draft Draft, addresses draftAddresses, metadata draftMetadata, 
 	header.SetAddressList("Cc", addresses.cc)
 	header.SetAddressList("Bcc", addresses.bcc)
 	header.SetSubject(draft.Subject)
-	if metadata.messageID != "" {
-		header.SetMessageID(metadata.messageID)
+	if thread.messageID != "" {
+		header.SetMessageID(thread.messageID)
 	} else if err := header.GenerateMessageIDWithHostname("baryon-mcp.local"); err != nil {
 		return messageMail.Header{}, fmt.Errorf("generating Message-ID: %w", err)
+	}
+	if len(thread.inReplyTo) > 0 {
+		header.SetMsgIDList("In-Reply-To", thread.inReplyTo)
+	}
+	if len(thread.references) > 0 {
+		header.SetMsgIDList("References", thread.references)
 	}
 	return header, nil
 }
@@ -170,8 +168,8 @@ func writeAlternative(w *messageMail.InlineWriter, draft Draft) error {
 	return w.Close()
 }
 
-func buildDraftMessage(draft Draft, addresses draftAddresses, metadata draftMetadata, now time.Time) ([]byte, error) {
-	header, err := draftHeader(draft, addresses, metadata, now)
+func buildDraftMessage(draft Draft, addresses draftAddresses, thread threadHeaders, now time.Time) ([]byte, error) {
+	header, err := draftHeader(draft, addresses, thread, now)
 	if err != nil {
 		return nil, err
 	}
@@ -270,12 +268,11 @@ func findDraftsMailbox(cli *imapclient.Client) (string, error) {
 	return "", fmt.Errorf("bridge returned no Drafts mailbox by special-use attribute or name")
 }
 
-func fetchDraftMetadata(cli *imapclient.Client, uid uint32) (draftMetadata, error) {
-	section := &imap.FetchItemBodySection{
-		Specifier:    imap.PartSpecifierHeader,
-		HeaderFields: []string{"Message-ID", "In-Reply-To", "References", "X-Pm-Internal-Id"},
-		Peek:         true,
-	}
+// fetchDraftMetadata reads the headers a replacement must carry over. Malformed
+// identification headers are an error here: silently dropping them would
+// detach the draft from its conversation.
+func fetchDraftMetadata(cli *imapclient.Client, uid uint32) (threadHeaders, error) {
+	section := threadHeaderSection()
 	messages, err := cli.Fetch(imap.UIDSetNum(imap.UID(uid)), &imap.FetchOptions{
 		UID:         true,
 		Flags:       true,
@@ -283,50 +280,20 @@ func fetchDraftMetadata(cli *imapclient.Client, uid uint32) (draftMetadata, erro
 		BodySection: []*imap.FetchItemBodySection{section},
 	}).Collect()
 	if err != nil {
-		return draftMetadata{}, fmt.Errorf("fetching draft uid %d: %w", uid, err)
+		return threadHeaders{}, fmt.Errorf("fetching draft uid %d: %w", uid, err)
 	}
 	if len(messages) == 0 {
-		return draftMetadata{}, fmt.Errorf("draft with uid %d not found in Drafts", uid)
+		return threadHeaders{}, fmt.Errorf("draft with uid %d not found in Drafts", uid)
 	}
 	if slices.Contains(messages[0].Flags, imap.FlagDeleted) {
-		return draftMetadata{}, fmt.Errorf("draft with uid %d is already marked deleted", uid)
+		return threadHeaders{}, fmt.Errorf("draft with uid %d is already marked deleted", uid)
 	}
-	reader, err := messageMail.CreateReader(bytes.NewReader(messages[0].FindBodySection(section)))
+	thread, err := parseThreadHeaders(messages[0].FindBodySection(section))
 	if err != nil {
-		return draftMetadata{}, fmt.Errorf("parsing draft uid %d headers: %w", uid, err)
+		return threadHeaders{}, fmt.Errorf("draft uid %d: %w", uid, err)
 	}
-	defer reader.Close()
-
-	var metadata draftMetadata
-	metadata.messageID, err = reader.Header.MessageID()
-	if err != nil {
-		return draftMetadata{}, fmt.Errorf("parsing draft uid %d Message-ID: %w", uid, err)
-	}
-	metadata.inReplyTo, err = reader.Header.MsgIDList("In-Reply-To")
-	if err != nil {
-		return draftMetadata{}, fmt.Errorf("parsing draft uid %d In-Reply-To: %w", uid, err)
-	}
-	metadata.references, err = reader.Header.MsgIDList("References")
-	if err != nil {
-		return draftMetadata{}, fmt.Errorf("parsing draft uid %d References: %w", uid, err)
-	}
-	// Bridge adds its own message ID to References on every rebuilt message for
-	// client compatibility. That exact self-reference is not reply metadata.
-	if internalID := strings.TrimSpace(reader.Header.Get("X-Pm-Internal-Id")); internalID != "" {
-		selfReference := internalID + "@" + protonBridgeInternalIDDomain
-		metadata.references = slices.DeleteFunc(metadata.references, func(reference string) bool {
-			return reference == selfReference
-		})
-	}
-	if envelope := messages[0].Envelope; envelope != nil {
-		if metadata.messageID == "" {
-			metadata.messageID = envelope.MessageID
-		}
-		if len(metadata.inReplyTo) == 0 {
-			metadata.inReplyTo = envelope.InReplyTo
-		}
-	}
-	return metadata, nil
+	thread.fillFromEnvelope(messages[0].Envelope)
+	return thread, nil
 }
 
 func appendDraft(cli *imapclient.Client, folder string, raw []byte, now time.Time) (*imap.AppendData, error) {
@@ -387,6 +354,10 @@ func (c *Client) SaveDraft(ctx context.Context, draft Draft) (*SavedDraft, error
 	if err != nil {
 		return nil, err
 	}
+	thread, err := draftThreadHeaders(draft)
+	if err != nil {
+		return nil, err
+	}
 
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -412,22 +383,26 @@ func (c *Client) SaveDraft(ctx context.Context, draft Draft) (*SavedDraft, error
 			return fmt.Errorf("selecting Drafts mailbox %q: %w", folder, err)
 		}
 
-		var metadata draftMetadata
 		if draft.Replace != nil {
 			if selected.UIDValidity != draft.Replace.UIDValidity {
 				return fmt.Errorf("Drafts UIDVALIDITY changed (now %d, expected %d): draft UIDs are stale, re-run list_emails", selected.UIDValidity, draft.Replace.UIDValidity)
 			}
-			metadata, err = fetchDraftMetadata(cli, draft.Replace.UID)
+			previous, err := fetchDraftMetadata(cli, draft.Replace.UID)
 			if err != nil {
 				return err
 			}
-			if len(metadata.inReplyTo) > 0 || len(metadata.references) > 0 {
-				return fmt.Errorf("draft uid %d contains In-Reply-To or References headers that Proton Bridge cannot preserve during IMAP replacement; refusing to replace it", draft.Replace.UID)
+			thread.messageID = previous.messageID
+			// An omitted header is kept; an empty one is a request to remove it.
+			if thread.inReplyTo == nil {
+				thread.inReplyTo = previous.inReplyTo
+			}
+			if thread.references == nil {
+				thread.references = previous.references
 			}
 		}
 
 		now := time.Now()
-		raw, err := buildDraftMessage(draft, addresses, metadata, now)
+		raw, err := buildDraftMessage(draft, addresses, thread, now)
 		if err != nil {
 			return err
 		}

@@ -24,6 +24,8 @@ type saveDraftInput struct {
 	Subject     string                 `json:"subject,omitempty"`
 	TextBody    string                 `json:"text_body,omitempty" jsonschema:"plain-text body, up to 50000 characters"`
 	HTMLBody    string                 `json:"html_body,omitempty" jsonschema:"optional HTML alternative, up to 50000 characters"`
+	InReplyTo   []string               `json:"in_reply_to,omitempty" jsonschema:"Message-IDs this draft replies to, normally just the message_id of the email being answered; angle brackets optional; when replacing a draft, omit to keep the existing header or pass an empty array to remove it"`
+	References  []string               `json:"references,omitempty" jsonschema:"conversation chain: the parent email's references followed by its message_id; set together with in_reply_to so clients thread the reply; when replacing a draft, omit to keep the existing header or pass an empty array to remove it"`
 	Attachments []draftAttachmentInput `json:"attachments,omitempty" jsonschema:"regular file attachments; at most 100 and 25 MB decoded in total"`
 	UID         uint32                 `json:"uid,omitempty" jsonschema:"existing draft UID to replace; requires uidvalidity"`
 	UIDValidity uint32                 `json:"uidvalidity,omitempty" jsonschema:"Drafts UIDVALIDITY accompanying uid"`
@@ -60,13 +62,15 @@ func toDraft(in saveDraftInput, attachmentRoots []string) (bridgeclient.Draft, e
 	}
 
 	draft := bridgeclient.Draft{
-		From:     in.From,
-		To:       in.To,
-		Cc:       in.Cc,
-		Bcc:      in.Bcc,
-		Subject:  in.Subject,
-		TextBody: in.TextBody,
-		HTMLBody: in.HTMLBody,
+		From:       in.From,
+		To:         in.To,
+		Cc:         in.Cc,
+		Bcc:        in.Bcc,
+		Subject:    in.Subject,
+		TextBody:   in.TextBody,
+		HTMLBody:   in.HTMLBody,
+		InReplyTo:  in.InReplyTo,
+		References: in.References,
 	}
 	if in.UID != 0 {
 		draft.Replace = &bridgeclient.DraftRef{UID: in.UID, UIDValidity: in.UIDValidity}
@@ -98,7 +102,7 @@ func toDraft(in saveDraftInput, attachmentRoots []string) (bridgeclient.Draft, e
 func registerSaveDraft(server *mcp.Server, bridge bridgeclient.Bridge, attachmentRoots []string) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "save_draft",
-		Description: "Create a complete Proton Mail draft, or replace an existing draft when uid and uidvalidity are provided. Supports plain text, an optional HTML alternative, and bounded attachments supplied either inline as base64 (content_base64) or as an absolute path to a local file that the server reads at save time (content_path). Updating appends the replacement before removing the old UID; drafts with reply-thread headers are refused because Bridge cannot preserve them. Inspect warning if cleanup was incomplete.",
+		Description: "Create a complete Proton Mail draft, or replace an existing draft when uid and uidvalidity are provided. Supports plain text, an optional HTML alternative, and bounded attachments supplied either inline as base64 (content_base64) or as an absolute path to a local file that the server reads at save time (content_path). To reply inside a thread, read the message with get_email and set in_reply_to to its message_id, and references to its references followed by its message_id; when it reports no references, use its in_reply_to in their place so earlier ancestry survives. A replacement keeps the previous draft's Message-ID, plus whichever of its In-Reply-To and References the call omits; passing an empty array for either removes it, detaching the draft from its thread. Updating appends the replacement before removing the old UID; inspect warning if cleanup was incomplete.",
 		Annotations: saveDraftAnnotations(),
 	}, func(ctx context.Context, req *mcp.CallToolRequest, in saveDraftInput) (*mcp.CallToolResult, saveDraftOutput, error) {
 		draft, err := toDraft(in, attachmentRoots)
