@@ -31,61 +31,24 @@ func decodeAttachment(index int, in draftAttachmentInput) (bridgeclient.DraftAtt
 	return bridgeclient.DraftAttachment{Filename: in.Filename, ContentType: in.ContentType, Data: data}, nil
 }
 
-// relWithinRoot walks resolved's parents comparing directory identity with
-// os.SameFile, so containment survives case-insensitive volume spellings that
-// a lexical prefix check would miss.
-func relWithinRoot(resolved string, rootInfo os.FileInfo) (string, bool) {
-	rel := ""
-	for cur := resolved; ; {
-		parent := filepath.Dir(cur)
-		if parent == cur {
-			return "", false
-		}
-		rel = filepath.Join(filepath.Base(cur), rel)
-		info, err := os.Stat(parent)
-		if err != nil {
-			return "", false
-		}
-		if os.SameFile(rootInfo, info) {
-			return rel, true
-		}
-		cur = parent
-	}
-}
-
 // openAttachmentFile opens resolved for reading. With roots configured it opens
 // through os.Root so a concurrent symlink swap cannot escape the allowed
 // directory between validation and read. O_NONBLOCK keeps a file swapped for a
 // FIFO from hanging the open; regular-file reads ignore it.
-func openAttachmentFile(resolved string, roots []string) (*os.File, error) {
-	if len(roots) == 0 {
+func openAttachmentFile(resolved string, roots attachmentRoots) (*os.File, error) {
+	if !roots.configured {
 		return os.OpenFile(resolved, os.O_RDONLY|syscall.O_NONBLOCK, 0)
 	}
-	for _, rootDir := range roots {
-		rootInfo, err := os.Stat(rootDir)
-		if err != nil {
-			continue
-		}
-		rel, ok := relWithinRoot(resolved, rootInfo)
-		if !ok {
-			continue
-		}
-		root, err := os.OpenRoot(rootDir)
-		if err != nil {
-			return nil, err
-		}
-		defer root.Close()
-		// Refuse a root swapped for a symlink between containment and open.
-		opened, err := root.Stat(".")
-		if err != nil || !os.SameFile(rootInfo, opened) {
-			return nil, fmt.Errorf("allowed root %q changed during validation", rootDir)
-		}
-		return root.OpenFile(rel, os.O_RDONLY|syscall.O_NONBLOCK, 0)
+	root, rel, ok := roots.bind(resolved, relWithinRoot)
+	if !ok {
+		return nil, fmt.Errorf("file is outside the directories allowed by BARYON_ATTACHMENT_ROOTS")
 	}
-	return nil, fmt.Errorf("file is outside the directories allowed by BARYON_ATTACHMENT_ROOTS")
+	// The returned file keeps its own descriptor once the root is closed.
+	defer root.Close()
+	return root.OpenFile(rel, os.O_RDONLY|syscall.O_NONBLOCK, 0)
 }
 
-func readAttachmentFile(index int, in draftAttachmentInput, roots []string) (bridgeclient.DraftAttachment, error) {
+func readAttachmentFile(index int, in draftAttachmentInput, roots attachmentRoots) (bridgeclient.DraftAttachment, error) {
 	// Fail closed on Windows: resolving a junction that targets \\host\share
 	// authenticates to the remote SMB host before any containment check.
 	if runtime.GOOS == "windows" {

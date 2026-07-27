@@ -1,5 +1,6 @@
 // Package mcptools defines baryon-mcp's MCP tools. Read tools use EXAMINE and
-// peek fetches; save_draft is the sole mailbox-mutating tool.
+// peek fetches; save_draft is the sole mailbox-mutating tool and
+// save_attachment the sole one that writes to local disk.
 package mcptools
 
 import (
@@ -10,20 +11,25 @@ import (
 
 // Options carries tool settings taken from server configuration.
 type Options struct {
-	// AttachmentRoots limits save_draft content_path reads to these
-	// symlink-resolved directories; empty means unrestricted.
+	// AttachmentRoots confines save_draft content_path reads and save_attachment
+	// writes to these symlink-resolved directories; empty means unrestricted.
+	// The directories are pinned by identity at registration.
 	AttachmentRoots []string
 }
 
-// RegisterAll adds every tool to the server, backed by bridge.
+// RegisterAll adds every tool to the server, backed by bridge. The attachment
+// roots are pinned once here, at startup, so later changes to those directories
+// cannot move the boundary the tools enforce.
 func RegisterAll(server *mcp.Server, bridge bridgeclient.Bridge, opts Options) {
+	roots := pinAttachmentRoots(opts.AttachmentRoots)
 	registerListFolders(server, bridge)
 	registerListEmails(server, bridge)
 	registerSearchEmails(server, bridge)
 	registerGetEmail(server, bridge)
 	registerListAttachments(server, bridge)
 	registerGetAttachment(server, bridge)
-	registerSaveDraft(server, bridge, opts.AttachmentRoots)
+	registerSaveAttachment(server, bridge, roots)
+	registerSaveDraft(server, bridge, roots)
 }
 
 // readOnly returns the annotations shared by all baryon-mcp tools.

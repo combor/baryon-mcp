@@ -181,7 +181,7 @@ func TestToDraftStopsAtTotalAttachmentLimit(t *testing.T) {
 		ContentBase64: strp("%%%"),
 	})
 
-	_, err := toDraft(saveDraftInput{From: "alice@example.org", Attachments: attachments}, nil)
+	_, err := toDraft(saveDraftInput{From: "alice@example.org", Attachments: attachments}, attachmentRoots{})
 	if err == nil || !strings.Contains(err.Error(), "attachments total") {
 		t.Fatalf("error = %v, want aggregate attachment limit", err)
 	}
@@ -243,7 +243,7 @@ func TestToDraftRejectsAmbiguousAttachmentSource(t *testing.T) {
 		{Filename: "x", ContentType: "text/plain"},
 		{Filename: "x", ContentType: "text/plain", ContentBase64: strp("aGk="), ContentPath: strp("/tmp/x")},
 	} {
-		_, err := toDraft(draftWithAttachments("alice@example.org", attachment), nil)
+		_, err := toDraft(draftWithAttachments("alice@example.org", attachment), attachmentRoots{})
 		if err == nil || !strings.Contains(err.Error(), "exactly one of content_base64 or content_path") {
 			t.Errorf("attachment %+v: error = %v, want source conflict", attachment, err)
 		}
@@ -258,7 +258,7 @@ func TestToDraftRejectsBadAttachmentPaths(t *testing.T) {
 		{filepath.Join(dir, "missing.pdf"), "missing.pdf"},
 		{dir, "regular file"},
 	} {
-		_, err := toDraft(draftWithAttachments("alice@example.org", draftAttachmentInput{ContentPath: strp(tc.path)}), nil)
+		_, err := toDraft(draftWithAttachments("alice@example.org", draftAttachmentInput{ContentPath: strp(tc.path)}), attachmentRoots{})
 		if err == nil || !strings.Contains(err.Error(), tc.want) {
 			t.Errorf("path %q: error = %v, want mention of %q", tc.path, err, tc.want)
 		}
@@ -282,15 +282,60 @@ func TestToDraftEnforcesAttachmentRoots(t *testing.T) {
 		t.Skipf("symlinks unavailable: %v", err)
 	}
 
-	draft, err := toDraft(draftWithAttachments("alice@example.org", draftAttachmentInput{ContentPath: strp(inside)}), []string{root})
+	draft, err := toDraft(draftWithAttachments("alice@example.org", draftAttachmentInput{ContentPath: strp(inside)}), pinAttachmentRoots([]string{root}))
 	if err != nil || string(draft.Attachments[0].Data) != "in" {
 		t.Errorf("inside root: (%+v, %v), want success", draft.Attachments, err)
 	}
 	for _, path := range []string{outsideFile, escape} {
-		_, err := toDraft(draftWithAttachments("alice@example.org", draftAttachmentInput{ContentPath: strp(path)}), []string{root})
+		_, err := toDraft(draftWithAttachments("alice@example.org", draftAttachmentInput{ContentPath: strp(path)}), pinAttachmentRoots([]string{root}))
 		if err == nil || !strings.Contains(err.Error(), "outside the directories") {
 			t.Errorf("path %q: error = %v, want root restriction", path, err)
 		}
+	}
+}
+
+// Replacing the configured root with a symlink after startup must not move the
+// read boundary with it. Re-resolving the root at call time would compare the
+// replacement against itself and pass, letting content_path attach any file the
+// server can read.
+func TestToDraftRefusesReadThroughRedirectedRoot(t *testing.T) {
+	root := resolveDir(t, t.TempDir())
+	outside := resolveDir(t, t.TempDir())
+	writeTestFile(t, outside, "secret.txt", []byte("PRIVATE KEY MATERIAL"))
+
+	roots := pinAttachmentRoots([]string{root})
+
+	if err := os.Rename(root, root+".real"); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, root); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+
+	// A path that still looks like it is inside the configured root.
+	target := filepath.Join(root, "secret.txt")
+	draft, err := toDraft(draftWithAttachments("alice@example.org", draftAttachmentInput{ContentPath: strp(target)}), roots)
+	if err == nil {
+		t.Fatalf("read escaped the configured root and attached %q", string(draft.Attachments[0].Data))
+	}
+	if !strings.Contains(err.Error(), "outside the directories") {
+		t.Errorf("error = %v, want the redirected root refused", err)
+	}
+}
+
+// A configured boundary with no reachable directory must refuse every read
+// rather than fall back to unrestricted access.
+func TestToDraftFailsClosedWhenNoRootPins(t *testing.T) {
+	missing := filepath.Join(t.TempDir(), "never-created")
+	roots := pinAttachmentRoots([]string{missing})
+	if !roots.configured || len(roots.dirs) != 0 {
+		t.Fatalf("roots = %+v, want a configured boundary with nothing pinned", roots)
+	}
+
+	readable := writeTestFile(t, resolveDir(t, t.TempDir()), "anywhere.txt", []byte("data"))
+	_, err := toDraft(draftWithAttachments("alice@example.org", draftAttachmentInput{ContentPath: strp(readable)}), roots)
+	if err == nil || !strings.Contains(err.Error(), "outside the directories") {
+		t.Errorf("error = %v, want the read refused", err)
 	}
 }
 
@@ -309,7 +354,7 @@ func TestToDraftAcceptsCaseInsensitiveSpellingInsideRoot(t *testing.T) {
 		t.Skipf("volume is case-sensitive: %v", err)
 	}
 
-	draft, err := toDraft(draftWithAttachments("alice@example.org", draftAttachmentInput{ContentPath: strp(respelled)}), []string{root})
+	draft, err := toDraft(draftWithAttachments("alice@example.org", draftAttachmentInput{ContentPath: strp(respelled)}), pinAttachmentRoots([]string{root}))
 	if err != nil || string(draft.Attachments[0].Data) != "in" {
 		t.Errorf("respelled path inside root: (%+v, %v), want success", draft.Attachments, err)
 	}
@@ -329,7 +374,7 @@ func TestToDraftChecksPathAttachmentSizeBeforeReading(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err = toDraft(draftWithAttachments("alice@example.org", draftAttachmentInput{ContentPath: strp(path)}), nil)
+	_, err = toDraft(draftWithAttachments("alice@example.org", draftAttachmentInput{ContentPath: strp(path)}), attachmentRoots{})
 	if err == nil || !strings.Contains(err.Error(), "byte limit") || !strings.Contains(err.Error(), "big.bin") {
 		t.Fatalf("error = %v, want per-attachment size limit naming the path", err)
 	}
@@ -352,7 +397,7 @@ func TestToDraftCountsPathAndBase64TowardTotalLimit(t *testing.T) {
 	_, err = toDraft(draftWithAttachments("alice@example.org",
 		draftAttachmentInput{ContentPath: strp(path)},
 		draftAttachmentInput{Filename: "rest.bin", ContentType: "application/octet-stream", ContentBase64: strp(encoded)},
-	), nil)
+	), attachmentRoots{})
 	if err == nil || !strings.Contains(err.Error(), "attachments total") {
 		t.Fatalf("error = %v, want aggregate attachment limit across sources", err)
 	}
@@ -372,7 +417,7 @@ func TestToDraftChecksExactDecodedAttachmentSize(t *testing.T) {
 			ContentType:   "application/octet-stream",
 			ContentBase64: strp(encoded),
 		}},
-	}, nil)
+	}, attachmentRoots{})
 	if err == nil || !strings.Contains(err.Error(), "decoded content") {
 		t.Fatalf("error = %v, want exact decoded attachment limit", err)
 	}

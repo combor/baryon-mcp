@@ -52,7 +52,7 @@ func saveDraftAnnotations() *mcp.ToolAnnotations {
 	}
 }
 
-func toDraft(in saveDraftInput, attachmentRoots []string) (bridgeclient.Draft, error) {
+func toDraft(in saveDraftInput, roots attachmentRoots) (bridgeclient.Draft, error) {
 	if (in.UID == 0) != (in.UIDValidity == 0) {
 		return bridgeclient.Draft{}, fmt.Errorf("uid and uidvalidity must be supplied together when replacing a draft")
 	}
@@ -83,7 +83,7 @@ func toDraft(in saveDraftInput, attachmentRoots []string) (bridgeclient.Draft, e
 		var loaded bridgeclient.DraftAttachment
 		var err error
 		if attachment.ContentPath != nil {
-			loaded, err = readAttachmentFile(i, attachment, attachmentRoots)
+			loaded, err = readAttachmentFile(i, attachment, roots)
 		} else {
 			loaded, err = decodeAttachment(i, attachment)
 		}
@@ -99,13 +99,13 @@ func toDraft(in saveDraftInput, attachmentRoots []string) (bridgeclient.Draft, e
 	return draft, nil
 }
 
-func registerSaveDraft(server *mcp.Server, bridge bridgeclient.Bridge, attachmentRoots []string) {
+func registerSaveDraft(server *mcp.Server, bridge bridgeclient.Bridge, roots attachmentRoots) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "save_draft",
 		Description: "Create a complete Proton Mail draft, or replace an existing draft when uid and uidvalidity are provided. Supports plain text, an optional HTML alternative, and bounded attachments supplied either inline as base64 (content_base64) or as an absolute path to a local file that the server reads at save time (content_path). To reply inside a thread, read the message with get_email and set in_reply_to to its message_id, and references to its references followed by its message_id; when it reports no references, use its in_reply_to in their place so earlier ancestry survives. A replacement keeps the previous draft's Message-ID, plus whichever of its In-Reply-To and References the call omits; passing an empty array for either removes it, detaching the draft from its thread. Updating appends the replacement before removing the old UID; inspect warning if cleanup was incomplete.",
 		Annotations: saveDraftAnnotations(),
 	}, func(ctx context.Context, req *mcp.CallToolRequest, in saveDraftInput) (*mcp.CallToolResult, saveDraftOutput, error) {
-		draft, err := toDraft(in, attachmentRoots)
+		draft, err := toDraft(in, roots)
 		if err != nil {
 			return nil, saveDraftOutput{}, err
 		}

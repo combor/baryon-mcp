@@ -1,7 +1,10 @@
 package mcptools
 
 import (
+	"context"
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -174,5 +177,126 @@ func TestGetAttachmentBase64InStructuredOutput(t *testing.T) {
 	}
 	if out.DecodedSizeBytes != 7 {
 		t.Errorf("out = %+v", out)
+	}
+}
+
+func TestSaveAttachmentWritesFileAndWithholdsBytes(t *testing.T) {
+	fake := &fakeBridge{attachment: &bridgeclient.AttachmentContent{
+		Filename: "big.pdf", ContentType: "application/pdf", EncodedSize: 12, Data: []byte("PDFDATA"),
+	}}
+	session := newTestSession(t, fake)
+	dir := t.TempDir()
+	out := filepath.Join(dir, "saved.pdf")
+	args := msgRefArgs()
+	args["index"] = 0
+	args["output_path"] = out
+
+	res := callTool(t, session, "save_attachment", args)
+	if res.IsError {
+		t.Fatalf("errored: %v", res.Content)
+	}
+	if len(res.Content) != 0 {
+		t.Errorf("content = %#v, want none", res.Content)
+	}
+	// The whole point: bytes reach disk without passing through the reply.
+	raw, _ := json.Marshal(res.StructuredContent)
+	if strings.Contains(string(raw), "UERGREFUQQ==") || strings.Contains(string(raw), "data_base64") {
+		t.Errorf("save_attachment leaked attachment bytes into its result: %s", raw)
+	}
+	var o saveAttachmentOutput
+	if err := json.Unmarshal(raw, &o); err != nil {
+		t.Fatal(err)
+	}
+	if o.SavedPath != filepath.Join(resolveDir(t, dir), "saved.pdf") {
+		t.Errorf("saved_path = %q", o.SavedPath)
+	}
+	if o.Filename != "big.pdf" || o.DecodedSizeBytes != 7 {
+		t.Errorf("out = %+v", o)
+	}
+	if got, err := os.ReadFile(out); err != nil || string(got) != "PDFDATA" {
+		t.Errorf("written file = %q, %v", got, err)
+	}
+}
+
+func TestSaveAttachmentWritesImagesToDiskToo(t *testing.T) {
+	fake := &fakeBridge{attachment: &bridgeclient.AttachmentContent{
+		Filename: "pic.png", ContentType: "image/png", EncodedSize: 3, Data: []byte{1, 2, 3},
+	}}
+	session := newTestSession(t, fake)
+	out := filepath.Join(t.TempDir(), "pic.png")
+	args := msgRefArgs()
+	args["index"] = 0
+	args["output_path"] = out
+
+	res := callTool(t, session, "save_attachment", args)
+	if res.IsError {
+		t.Fatalf("errored: %v", res.Content)
+	}
+	for _, c := range res.Content {
+		if _, ok := c.(*mcp.ImageContent); ok {
+			t.Error("save_attachment must not also return the image inline")
+		}
+	}
+	if got, err := os.ReadFile(out); err != nil || len(got) != 3 {
+		t.Errorf("written png = %v, %v", got, err)
+	}
+}
+
+// The schema rejects an absent output_path; an empty string satisfies the schema
+// and has to be refused in the handler.
+func TestSaveAttachmentRequiresOutputPath(t *testing.T) {
+	for _, tc := range []struct{ name, path string }{
+		{name: "absent"},
+		{name: "empty string", path: ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			fake := &fakeBridge{attachment: &bridgeclient.AttachmentContent{
+				Filename: "doc.pdf", ContentType: "application/pdf", Data: []byte("x"),
+			}}
+			args := msgRefArgs()
+			args["index"] = 0
+			if tc.name != "absent" {
+				args["output_path"] = tc.path
+			}
+			res := callTool(t, newTestSession(t, fake), "save_attachment", args)
+			if !res.IsError {
+				t.Fatalf("expected an error for %s output_path", tc.name)
+			}
+		})
+	}
+}
+
+func TestAttachmentToolAnnotationsSplitReadAndWrite(t *testing.T) {
+	tools, err := newTestSession(t, &fakeBridge{}).ListTools(context.Background(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	byName := make(map[string]*mcp.Tool)
+	for _, tool := range tools.Tools {
+		byName[tool.Name] = tool
+	}
+
+	// get_attachment touches nothing but the mailbox, read-only.
+	get, ok := byName["get_attachment"]
+	if !ok {
+		t.Fatal("get_attachment not registered")
+	}
+	if get.Annotations == nil || !get.Annotations.ReadOnlyHint || !get.Annotations.IdempotentHint {
+		t.Errorf("get_attachment must stay read-only and idempotent: %+v", get.Annotations)
+	}
+
+	// save_attachment writes a file, and refuse-if-exists makes a repeat fail.
+	save, ok := byName["save_attachment"]
+	if !ok {
+		t.Fatal("save_attachment not registered")
+	}
+	if save.Annotations == nil || save.Annotations.ReadOnlyHint {
+		t.Error("save_attachment must not claim read-only: it writes a file")
+	}
+	if save.Annotations.IdempotentHint {
+		t.Error("save_attachment must not claim idempotency: refuse-if-exists makes a repeat write fail")
+	}
+	if save.Annotations.DestructiveHint == nil || *save.Annotations.DestructiveHint {
+		t.Error("save_attachment never overwrites, so it should not claim destructiveness")
 	}
 }

@@ -54,7 +54,7 @@ type getAttachmentOutput struct {
 func registerGetAttachment(server *mcp.Server, bridge bridgeclient.Bridge) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "get_attachment",
-		Description: "Fetch one attachment's content (up to 25 MB decoded). Images are returned as image content; other files as base64 in the structured output alongside the metadata.",
+		Description: "Fetch one attachment's content into the conversation (up to 25 MB decoded). Images are returned as image content; other files as base64 in the structured output alongside the metadata. For an attachment too large to be worth reading inline, use save_attachment instead.",
 		Annotations: readOnly("Get attachment"),
 	}, func(ctx context.Context, req *mcp.CallToolRequest, in getAttachmentInput) (*mcp.CallToolResult, getAttachmentOutput, error) {
 		if err := in.validate(); err != nil {
@@ -84,6 +84,76 @@ func registerGetAttachment(server *mcp.Server, bridge bridgeclient.Bridge) {
 		if legacyContent(req) {
 			res.Content = append(res.Content, &mcp.TextContent{Text: fmt.Sprintf("%s (%s, %d bytes), base64:\n%s",
 				att.Filename, att.ContentType, len(att.Data), out.DataBase64)})
+		}
+		return res, out, nil
+	})
+}
+
+type saveAttachmentInput struct {
+	messageRef
+	Index      int    `json:"index" jsonschema:"attachment index from list_attachments or get_email"`
+	OutputPath string `json:"output_path" jsonschema:"absolute path to write the decoded attachment to on the server's machine; the parent directory must already exist and the file must not; not available on Windows"`
+}
+
+type saveAttachmentOutput struct {
+	Filename         string `json:"filename" jsonschema:"the attachment's own filename, which is not where it was written"`
+	ContentType      string `json:"content_type"`
+	EncodedSizeBytes uint32 `json:"encoded_size_bytes"`
+	DecodedSizeBytes int    `json:"decoded_size_bytes" jsonschema:"bytes written to disk"`
+	SavedPath        string `json:"saved_path" jsonschema:"symlink-resolved path the attachment was written to"`
+}
+
+// saveAttachmentAnnotations claims neither read-only nor idempotent: this tool
+// creates a file, and refusing to overwrite makes a repeated call fail.
+func saveAttachmentAnnotations() *mcp.ToolAnnotations {
+	destructive := false
+	closedWorld := false
+	return &mcp.ToolAnnotations{
+		Title:           "Save attachment",
+		ReadOnlyHint:    false,
+		DestructiveHint: &destructive,
+		IdempotentHint:  false,
+		OpenWorldHint:   &closedWorld,
+	}
+}
+
+func registerSaveAttachment(server *mcp.Server, bridge bridgeclient.Bridge, roots attachmentRoots) {
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "save_attachment",
+		Description: "Write one attachment (up to 25 MB decoded) to a local file on the server's machine and return only its path, keeping the bytes out of the conversation. Use this for attachments too large to read inline with get_attachment. An existing file is never overwritten and no directories are created.",
+		Annotations: saveAttachmentAnnotations(),
+	}, func(ctx context.Context, req *mcp.CallToolRequest, in saveAttachmentInput) (*mcp.CallToolResult, saveAttachmentOutput, error) {
+		if err := in.validate(); err != nil {
+			return nil, saveAttachmentOutput{}, err
+		}
+		if in.OutputPath == "" {
+			return nil, saveAttachmentOutput{}, fmt.Errorf("output_path is required; use get_attachment to read an attachment inline instead")
+		}
+		att, err := bridge.GetAttachment(ctx, in.Folder, in.UID, in.UIDValidity, in.Index)
+		if err != nil {
+			return nil, saveAttachmentOutput{}, err
+		}
+		// Don't leave a file behind for a caller that already gave up.
+		if err := ctx.Err(); err != nil {
+			return nil, saveAttachmentOutput{}, err
+		}
+		saved, err := writeAttachmentFile(in.OutputPath, att.Data, roots)
+		if err != nil {
+			return nil, saveAttachmentOutput{}, err
+		}
+
+		out := saveAttachmentOutput{
+			Filename:         att.Filename,
+			ContentType:      att.ContentType,
+			EncodedSizeBytes: att.EncodedSize,
+			DecodedSizeBytes: len(att.Data),
+			SavedPath:        saved,
+		}
+		// Empty non-nil Content stops the SDK echoing the JSON into a redundant text block.
+		res := &mcp.CallToolResult{Content: []mcp.Content{}}
+		if legacyContent(req) {
+			res.Content = append(res.Content, &mcp.TextContent{Text: fmt.Sprintf("%s (%s, %d bytes) written to %s",
+				att.Filename, att.ContentType, len(att.Data), saved)})
 		}
 		return res, out, nil
 	})

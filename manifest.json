@@ -5,7 +5,7 @@
   "display_name": "Baryon — Proton Mail via Bridge",
   "version": "0.1.0",
   "description": "Read Proton Mail and save drafts through your local Proton Mail Bridge.",
-  "long_description": "Baryon exposes your Proton Mail mailbox to MCP clients as seven tools: list folders, list/search emails, read a message, list and fetch attachments, and create or replace drafts. It talks IMAP to the Proton Mail Bridge running on your machine over loopback only, authenticates Bridge by pinning its TLS certificate, and keeps draft saving as its only mailbox write capability — it cannot send, move, or generally delete messages or change flags. To attach files, save_draft can read paths on your machine, optionally restricted to a folder you choose.",
+  "long_description": "Baryon exposes your Proton Mail mailbox to MCP clients as eight tools: list folders, list/search emails, read a message, list, fetch and save attachments, and create or replace drafts. It talks IMAP to the Proton Mail Bridge running on your machine over loopback only, authenticates Bridge by pinning its TLS certificate, and keeps draft saving as its only mailbox write capability — it cannot send, move, or generally delete messages or change flags. To move file bytes past the conversation, save_draft can read attachment paths on your machine and save_attachment can write a fetched attachment to one, both optionally restricted to a folder you choose.",
   "author": {
     "name": "Piotr Komborski"
   },
@@ -81,7 +81,7 @@
     "attachment_root": {
       "type": "directory",
       "title": "Attachment folder restriction",
-      "description": "When set, save_draft may only attach files from inside this folder. Leave empty to allow any file your user account can read."
+      "description": "When set, save_draft may only attach files from inside this folder, and save_attachment may only write into it. Leave empty to allow any path your user account can read or write."
     }
   },
   "compatibility": {
@@ -93,7 +93,8 @@
     { "name": "search_emails", "description": "Search messages by text, sender, recipient, subject, date range, or unread state" },
     { "name": "get_email", "description": "Read one message's metadata, text bodies, and attachment list" },
     { "name": "list_attachments", "description": "List a message's attachments without transferring content" },
-    { "name": "get_attachment", "description": "Fetch one attachment (up to 25 MB decoded)" },
+    { "name": "get_attachment", "description": "Fetch one attachment (up to 25 MB decoded) into the conversation" },
+    { "name": "save_attachment", "description": "Write one attachment to a local file and return only its path, keeping large attachments out of the conversation" },
     { "name": "save_draft", "description": "Create or replace a draft, including a threaded reply, with plain text, optional HTML, and attachments from base64 or local file paths" }
   ]
 }
