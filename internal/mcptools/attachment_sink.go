@@ -4,6 +4,7 @@ package mcptools
 // content_path reads.
 
 import (
+	"crypto/rand"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -47,18 +48,8 @@ func writeAttachmentFile(path string, data []byte, roots attachmentRoots) (strin
 	}
 	defer closeScope()
 
-	f, err := scope.create()
-	if err != nil {
+	if err := scope.writeExclusive(data); err != nil {
 		return "", fmt.Errorf("output_path %q: %w", path, err)
-	}
-	// Identify the file we created so cleanup can tell it from a replacement.
-	created, statErr := f.Stat()
-	if err := writeAndClose(f, data); err != nil {
-		if statErr == nil {
-			// Don't leave a truncated file a caller might mistake for the whole attachment.
-			scope.removeIfUnchanged(created)
-		}
-		return "", fmt.Errorf("writing output_path %q: %w", path, err)
 	}
 	return filepath.Join(resolvedDir, base), nil
 }
@@ -71,48 +62,74 @@ func writeAndClose(f *os.File, data []byte) error {
 	return f.Close()
 }
 
-// writeScope is the filesystem view used for the whole create-write-clean
-// sequence: an os.Root when roots confine the write, the plain filesystem
-// otherwise. Create and cleanup share one scope so a failed write is undone
-// through the same confinement that made the file, never through a bare path
-// that an ancestor symlink swap could redirect outside the allowed directory.
+// writeScope is the filesystem view every step of the write runs through: an
+// os.Root when roots confine it, the plain filesystem otherwise. Sharing one
+// scope keeps the temporary file, the link, and the cleanup inside the same
+// confinement, so none of them can follow a swapped path component out of the
+// allowed directory.
 type writeScope struct {
 	root *os.Root // nil when no roots are configured
 	name string   // path within root, or the absolute path when root is nil
 }
 
-func (s writeScope) create() (*os.File, error) {
-	const flags = os.O_WRONLY | os.O_CREATE | os.O_EXCL
-	if s.root == nil {
-		return os.OpenFile(s.name, flags, 0o600)
+// writeExclusive fills a temporary sibling and only then links it to the
+// caller's name, so that name appears exactly once, already complete. Failure
+// cleanup therefore only ever touches the unpredictable temporary name: no
+// check-then-delete of a path a caller or another process may own. Identity
+// comparison cannot substitute here, because a filesystem that reuses inodes
+// makes a freshly created replacement indistinguishable from the original.
+func (s writeScope) writeExclusive(data []byte) error {
+	tmp, err := s.tempName()
+	if err != nil {
+		return err
 	}
-	return s.root.OpenFile(s.name, flags, 0o600)
+	f, err := s.openFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_EXCL)
+	if err != nil {
+		return err
+	}
+	if err := writeAndClose(f, data); err != nil {
+		_ = s.remove(tmp)
+		return err
+	}
+	// Link refuses an existing destination, which is the never-overwrite
+	// guarantee, and publishes the complete file in one step.
+	if err := s.link(tmp, s.name); err != nil {
+		_ = s.remove(tmp)
+		return err
+	}
+	_ = s.remove(tmp)
+	return nil
 }
 
-// removeIfUnchanged deletes the file only while it is still the one created,
-// so an entry another process swapped in is left alone rather than destroyed.
-// POSIX has no unlink conditional on identity, so a swap landing between the
-// stat and the unlink is still removed; closing that would mean never
-// publishing the caller's path until the write succeeded, which costs more
-// machinery than the residual window is worth here.
-func (s writeScope) removeIfUnchanged(created os.FileInfo) {
-	var (
-		current os.FileInfo
-		err     error
-	)
+// tempName is a sibling of the target, so the eventual link stays within one
+// directory and therefore one filesystem.
+func (s writeScope) tempName() (string, error) {
+	var suffix [8]byte
+	if _, err := rand.Read(suffix[:]); err != nil {
+		return "", fmt.Errorf("naming temporary file: %w", err)
+	}
+	return fmt.Sprintf("%s.partial-%x", s.name, suffix), nil
+}
+
+func (s writeScope) openFile(name string, flags int) (*os.File, error) {
 	if s.root == nil {
-		current, err = os.Lstat(s.name)
-	} else {
-		current, err = s.root.Lstat(s.name)
+		return os.OpenFile(name, flags, 0o600)
 	}
-	if err != nil || !os.SameFile(created, current) {
-		return
-	}
+	return s.root.OpenFile(name, flags, 0o600)
+}
+
+func (s writeScope) remove(name string) error {
 	if s.root == nil {
-		_ = os.Remove(s.name)
-		return
+		return os.Remove(name)
 	}
-	_ = s.root.Remove(s.name)
+	return s.root.Remove(name)
+}
+
+func (s writeScope) link(oldname, newname string) error {
+	if s.root == nil {
+		return os.Link(oldname, newname)
+	}
+	return s.root.Link(oldname, newname)
 }
 
 // openWriteScope resolves resolvedDir against roots. A configured boundary with

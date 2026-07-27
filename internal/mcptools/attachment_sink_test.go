@@ -59,87 +59,47 @@ func TestWriteAttachmentFileRejectsBadPaths(t *testing.T) {
 	}
 }
 
-// Failed-write cleanup must delete only the file it created. If another process
-// swaps something else in first, deleting it would destroy data the tool never
-// wrote — which its non-destructive annotation promises it cannot do.
-func TestRemoveIfUnchangedSparesReplacedFile(t *testing.T) {
+// The target name must never exist in a partial state, and the temporary file
+// used to achieve that must not survive.
+func TestWriteAttachmentFileLeavesNoTemporaryFile(t *testing.T) {
 	dir := resolveDir(t, t.TempDir())
-	target := filepath.Join(dir, "target.bin")
+	path := filepath.Join(dir, "report.pdf")
 
-	f, err := os.OpenFile(target, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	if _, err := writeAttachmentFile(path, []byte("%PDF-data"), attachmentRoots{}); err != nil {
+		t.Fatal(err)
+	}
+
+	entries, err := os.ReadDir(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	created, err := f.Stat()
-	if err != nil {
-		t.Fatal(err)
+	var names []string
+	for _, e := range entries {
+		names = append(names, e.Name())
 	}
-	if err := f.Close(); err != nil {
-		t.Fatal(err)
-	}
-
-	// Same path, different file: what a racing process would leave behind.
-	if err := os.Remove(target); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(target, []byte("someone else's data"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-
-	writeScope{name: target}.removeIfUnchanged(created)
-
-	got, err := os.ReadFile(target)
-	if err != nil || string(got) != "someone else's data" {
-		t.Errorf("cleanup deleted a file it did not create: %q, %v", got, err)
+	if len(names) != 1 || names[0] != "report.pdf" {
+		t.Errorf("directory = %v, want only the finished file", names)
 	}
 }
 
-func TestRemoveIfUnchangedRemovesOwnFile(t *testing.T) {
+// A refused write must not disturb the existing file, and must not leave its
+// temporary file behind either.
+func TestWriteAttachmentFileRefusedOverwriteLeavesDirectoryClean(t *testing.T) {
 	dir := resolveDir(t, t.TempDir())
-	target := filepath.Join(dir, "own.bin")
+	path := writeTestFile(t, dir, "exists.bin", []byte("old"))
 
-	f, err := os.OpenFile(target, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	if _, err := writeAttachmentFile(path, []byte("new"), attachmentRoots{}); err == nil {
+		t.Fatal("expected refusal to overwrite an existing file")
+	}
+	if got, _ := os.ReadFile(path); string(got) != "old" {
+		t.Errorf("existing file was modified: %q", got)
+	}
+	entries, err := os.ReadDir(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	created, err := f.Stat()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := f.Close(); err != nil {
-		t.Fatal(err)
-	}
-
-	writeScope{name: target}.removeIfUnchanged(created)
-
-	if _, err := os.Stat(target); !os.IsNotExist(err) {
-		t.Errorf("partial file survived cleanup: %v", err)
-	}
-}
-
-// A rooted scope must clean up through the root, so cleanup cannot reach
-// outside BARYON_ATTACHMENT_ROOTS even if a path component is swapped.
-func TestRemoveIfUnchangedStaysInsideRoot(t *testing.T) {
-	root := resolveDir(t, t.TempDir())
-	outside := resolveDir(t, t.TempDir())
-	victim := writeTestFile(t, outside, "victim.bin", []byte("must survive"))
-
-	// A root-relative name that tries to climb out of the root.
-	escape := filepath.Join("..", filepath.Base(outside), "victim.bin")
-	info, err := os.Lstat(victim)
-	if err != nil {
-		t.Fatal(err)
-	}
-	openRoot, err := os.OpenRoot(root)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer openRoot.Close()
-
-	writeScope{root: openRoot, name: escape}.removeIfUnchanged(info)
-
-	if _, err := os.Stat(victim); err != nil {
-		t.Errorf("rooted cleanup escaped the root and deleted %q: %v", victim, err)
+	if len(entries) != 1 {
+		t.Errorf("directory = %d entries, want only the untouched original", len(entries))
 	}
 }
 
