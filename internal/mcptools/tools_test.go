@@ -102,6 +102,18 @@ func newTestSession(t *testing.T, bridge bridgeclient.Bridge) *mcp.ClientSession
 	return session
 }
 
+// The in-memory client negotiates the newest version both peers support, so
+// this pins what the rest of the suite is actually exercising.
+func TestSessionNegotiatesCurrentProtocol(t *testing.T) {
+	res := newTestSession(t, &fakeBridge{}).InitializeResult()
+	if res == nil {
+		t.Fatal("no initialize result")
+	}
+	if res.ProtocolVersion != "2026-07-28" {
+		t.Errorf("negotiated protocol = %q, want 2026-07-28", res.ProtocolVersion)
+	}
+}
+
 func TestListFoldersToolIsRegisteredReadOnly(t *testing.T) {
 	session := newTestSession(t, &fakeBridge{})
 	tools, err := session.ListTools(context.Background(), nil)

@@ -101,9 +101,24 @@ func TestLegacyProtocol(t *testing.T) {
 		"2025-03-26": true,
 		"2025-06-18": false,
 		"2025-11-25": false,
+		"2026-07-28": false,
 	} {
 		if got := legacyProtocol(version); got != want {
 			t.Errorf("legacyProtocol(%q) = %v, want %v", version, got, want)
+		}
+	}
+}
+
+func TestLegacyContentReadsPerRequestProtocolVersion(t *testing.T) {
+	for version, want := range map[string]bool{
+		"2025-03-26": true,
+		"2026-07-28": false,
+	} {
+		req := &mcp.CallToolRequest{Params: &mcp.CallToolParamsRaw{
+			Meta: mcp.Meta{mcp.MetaKeyProtocolVersion: version},
+		}}
+		if got := legacyContent(req); got != want {
+			t.Errorf("legacyContent(_meta %s) = %v, want %v", version, got, want)
 		}
 	}
 }

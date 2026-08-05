@@ -55,8 +55,7 @@ func legacyProtocol(version string) bool {
 }
 
 func legacyContent(req *mcp.CallToolRequest) bool {
-	p := req.Session.InitializeParams()
-	return p != nil && legacyProtocol(p.ProtocolVersion)
+	return legacyProtocol(req.ProtocolVersion())
 }
 
 type getEmailOutput struct {
