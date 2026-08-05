@@ -86,6 +86,7 @@ type Bridge interface {
 	ListFolders(ctx context.Context) ([]Folder, error)
 	ListMessages(ctx context.Context, folder string, criteria SearchCriteria, limit, offset int) (*MessagePage, error)
 	GetEmail(ctx context.Context, folder string, uid, uidvalidity uint32) (*EmailContent, error)
+	GetThread(ctx context.Context, ref ThreadRef) (*Thread, error)
 	ListAttachments(ctx context.Context, folder string, uid, uidvalidity uint32) ([]AttachmentInfo, error)
 	GetAttachment(ctx context.Context, folder string, uid, uidvalidity uint32, index int) (*AttachmentContent, error)
 	SaveDraft(ctx context.Context, draft Draft) (*SavedDraft, error)

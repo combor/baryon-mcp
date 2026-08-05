@@ -5,7 +5,7 @@
   "display_name": "Baryon — Proton Mail via Bridge",
   "version": "0.1.0",
   "description": "Read Proton Mail and save drafts through your local Proton Mail Bridge.",
-  "long_description": "Baryon exposes your Proton Mail mailbox to MCP clients as eight tools: list folders, list/search emails, read a message, list, fetch and save attachments, and create or replace drafts. It talks IMAP to the Proton Mail Bridge running on your machine over loopback only, authenticates Bridge by pinning its TLS certificate, and keeps draft saving as its only mailbox write capability — it cannot send, move, or generally delete messages or change flags. To move file bytes past the conversation, save_draft can read attachment paths on your machine and save_attachment can write a fetched attachment to one, both optionally restricted to a folder you choose.",
+  "long_description": "Baryon exposes your Proton Mail mailbox to MCP clients as nine tools: list folders, list/search emails, read a message, read a whole conversation, list, fetch and save attachments, and create or replace drafts. It talks IMAP to the Proton Mail Bridge running on your machine over loopback only, authenticates Bridge by pinning its TLS certificate, and keeps draft saving as its only mailbox write capability — it cannot send, move, or generally delete messages or change flags. To move file bytes past the conversation, save_draft can read attachment paths on your machine and save_attachment can write a fetched attachment to one, both optionally restricted to a folder you choose.",
   "author": {
     "name": "Piotr Komborski"
   },
@@ -92,6 +92,7 @@
     { "name": "list_emails", "description": "List messages in a folder, newest first, with pagination" },
     { "name": "search_emails", "description": "Search messages by text, sender, recipient, subject, date range, or unread state" },
     { "name": "get_email", "description": "Read one message's metadata, text bodies, and attachment list" },
+    { "name": "get_thread", "description": "Read a whole conversation from one of its messages, oldest first, optionally with shortened bodies" },
     { "name": "list_attachments", "description": "List a message's attachments without transferring content" },
     { "name": "get_attachment", "description": "Fetch one attachment (up to 25 MB decoded) into the conversation" },
     { "name": "save_attachment", "description": "Write one attachment to a local file and return only its path, keeping large attachments out of the conversation" },

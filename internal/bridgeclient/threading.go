@@ -36,6 +36,9 @@ type threadHeaders struct {
 	messageID  string
 	inReplyTo  []string
 	references []string
+	// root is the oldest reference, recorded before trimming so that a chain
+	// long enough to be trimmed still names the conversation it belongs to.
+	root string
 }
 
 func threadHeaderSection() *imap.FetchItemBodySection {
@@ -84,6 +87,9 @@ func parseThreadHeaders(raw []byte) (threadHeaders, error) {
 		headers.references = slices.DeleteFunc(headers.references, func(reference string) bool {
 			return reference == selfReference
 		})
+	}
+	if len(headers.references) > 0 {
+		headers.root = headers.references[0]
 	}
 	headers.inReplyTo = trimMsgIDs(headers.inReplyTo, MaxThreadReferences)
 	// A reply appends the parent's Message-ID to this chain, so leave it room:
