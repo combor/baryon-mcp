@@ -26,6 +26,7 @@ func RegisterAll(server *mcp.Server, bridge bridgeclient.Bridge, opts Options) {
 	registerListEmails(server, bridge)
 	registerSearchEmails(server, bridge)
 	registerGetEmail(server, bridge)
+	registerGetThread(server, bridge)
 	registerListAttachments(server, bridge)
 	registerGetAttachment(server, bridge)
 	registerSaveAttachment(server, bridge, roots)

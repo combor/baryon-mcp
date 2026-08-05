@@ -16,6 +16,7 @@ Baryon runs over stdio and connects to Bridge over IMAP. Draft saving is its onl
 | `list_emails` | List messages in a folder, newest first, with pagination |
 | `search_emails` | Search by text, sender, recipient, subject, date, or unread state |
 | `get_email` | Read metadata, Bcc recipients, plain-text/HTML bodies, and attachment metadata |
+| `get_thread` | Read a whole conversation from one of its messages, oldest first, optionally with shortened bodies |
 | `list_attachments` | List attachment metadata without downloading content |
 | `get_attachment` | Fetch one attachment into the conversation, up to 25 MB decoded |
 | `save_attachment` | Write one attachment to a local file and return only its path |

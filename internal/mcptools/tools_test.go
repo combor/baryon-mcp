@@ -28,6 +28,10 @@ type fakeBridge struct {
 	email    *bridgeclient.EmailContent
 	emailErr error
 
+	thread    *bridgeclient.Thread
+	threadErr error
+	gotThread bridgeclient.ThreadRef
+
 	attachments    []bridgeclient.AttachmentInfo
 	attachmentsErr error
 
@@ -60,6 +64,14 @@ func (f *fakeBridge) GetEmail(ctx context.Context, folder string, uid, uidvalidi
 		return nil, f.emailErr
 	}
 	return f.email, f.emailErr
+}
+
+func (f *fakeBridge) GetThread(ctx context.Context, ref bridgeclient.ThreadRef) (*bridgeclient.Thread, error) {
+	f.gotThread = ref
+	if f.thread == nil {
+		return nil, f.threadErr
+	}
+	return f.thread, f.threadErr
 }
 
 func (f *fakeBridge) ListAttachments(ctx context.Context, folder string, uid, uidvalidity uint32) ([]bridgeclient.AttachmentInfo, error) {
