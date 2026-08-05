@@ -27,6 +27,8 @@ Baryon runs over stdio and connects to Bridge over IMAP. Draft saving is its onl
 - The IMAP username and generated password shown in Bridge's mailbox settings
 - Bridge's exported TLS certificate for a verified connection
 
+Baryon speaks MCP `2026-07-28` and negotiates down to any earlier revision back to `2024-11-05`, so older clients keep working.
+
 Building from source requires Go 1.26.5 or later.
 
 ## Installation
