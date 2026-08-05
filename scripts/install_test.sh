@@ -38,7 +38,7 @@ CLIENT_LOG="$TEST_DIR/clients.log"
 SECURITY_LOG="$TEST_DIR/security.log"
 CERT_PATH="$TEST_DIR/exported-cert.pem"
 ARCHIVE="baryon-mcp_${VERSION}_linux_amd64.tar.gz"
-MAC_ARCHIVE="baryon-mcp_${VERSION}_darwin_all.tar.gz"
+MAC_ARCHIVE="baryon-mcp_${VERSION}_darwin_arm64.tar.gz"
 CHECKSUMS="baryon-mcp_${VERSION}_SHA256SUMS"
 
 mkdir -p "$RELEASE_DIR" "$PAYLOAD_DIR" "$MOCK_BIN" "$HOME_DIR"

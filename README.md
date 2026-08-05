@@ -78,7 +78,7 @@ Credential storage:
 
 Download and extract the platform archive from the [latest release](https://github.com/combor/baryon-mcp/releases/latest), then point your client at the `baryon-mcp` binary using the configuration below.
 
-Releases provide a universal macOS build, Linux builds for amd64 and arm64, and a Windows amd64 build.
+Releases provide macOS and Linux builds for amd64 and arm64, and a Windows amd64 build.
 
 ## Configuration
 

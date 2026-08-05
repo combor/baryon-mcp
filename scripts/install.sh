@@ -149,7 +149,11 @@ resolve_platform() {
 	case "$platform_os" in
 		Darwin | darwin)
 			OS=darwin
-			ARCH=all
+			case "$platform_arch" in
+				x86_64 | amd64) ARCH=amd64 ;;
+				aarch64 | arm64) ARCH=arm64 ;;
+				*) die "unsupported macOS architecture: $platform_arch" ;;
+			esac
 			ARCHIVE_FORMAT=tar.gz
 			CONFIG_DIR="$HOME/.config/baryon-mcp"
 			SECURITY_COMMAND=${BARYON_INSTALLER_SECURITY_COMMAND:-/usr/bin/security}

@@ -5,15 +5,10 @@ set -euo pipefail
 
 os=$1 arch=$2 binary=$3 version=$4
 
-# macOS ships only as the universal binary.
-if [ "$os" = darwin ] && [ "$arch" != all ]; then
-  exit 0
-fi
-
 cd "$(dirname "$0")/.."
 
 case "$os" in
-  darwin)  platform=darwin; suffix=darwin ;;
+  darwin)  platform=darwin; suffix=darwin-$arch ;;
   linux)   platform=linux; suffix=linux-$arch ;;
   windows) platform=win32; suffix=windows-$arch ;;
   *) echo "unsupported os: $os" >&2; exit 1 ;;
