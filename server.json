@@ -1,0 +1,60 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.combor/baryon-mcp",
+  "title": "Baryon — Proton Mail via Bridge",
+  "description": "Read Proton Mail and save drafts through your local Proton Mail Bridge.",
+  "version": "0.3.1",
+  "websiteUrl": "https://github.com/combor/baryon-mcp",
+  "repository": {
+    "url": "https://github.com/combor/baryon-mcp",
+    "source": "github",
+    "id": "1302676087"
+  },
+  "packages": [
+    {
+      "registryType": "mcpb",
+      "identifier": "https://github.com/combor/baryon-mcp/releases/download/v0.3.1/baryon-mcp-darwin-amd64.mcpb",
+      "version": "0.3.1",
+      "fileSha256": "e7ef1dbfb36742299a4b43459daed0fea18b693c1cc2592f816bb213c65bc983",
+      "transport": {
+        "type": "stdio"
+      }
+    },
+    {
+      "registryType": "mcpb",
+      "identifier": "https://github.com/combor/baryon-mcp/releases/download/v0.3.1/baryon-mcp-darwin-arm64.mcpb",
+      "version": "0.3.1",
+      "fileSha256": "445fcf516155616fdd379c3af76f093de1b76aff6488c279141372961f5da613",
+      "transport": {
+        "type": "stdio"
+      }
+    },
+    {
+      "registryType": "mcpb",
+      "identifier": "https://github.com/combor/baryon-mcp/releases/download/v0.3.1/baryon-mcp-linux-amd64.mcpb",
+      "version": "0.3.1",
+      "fileSha256": "70bf5c911407aa3bc3b9cf9394af28678a31ba18c99834fe8835440f16d4529f",
+      "transport": {
+        "type": "stdio"
+      }
+    },
+    {
+      "registryType": "mcpb",
+      "identifier": "https://github.com/combor/baryon-mcp/releases/download/v0.3.1/baryon-mcp-linux-arm64.mcpb",
+      "version": "0.3.1",
+      "fileSha256": "e3b8ea5ed1678acb1eab4752887812394a686f792181616fda8d93a536318b41",
+      "transport": {
+        "type": "stdio"
+      }
+    },
+    {
+      "registryType": "mcpb",
+      "identifier": "https://github.com/combor/baryon-mcp/releases/download/v0.3.1/baryon-mcp-windows-amd64.mcpb",
+      "version": "0.3.1",
+      "fileSha256": "22b61104974d056f907b0b9a41e4072dbf4f0f5b4ca2856a42883f819e24d287",
+      "transport": {
+        "type": "stdio"
+      }
+    }
+  ]
+}
