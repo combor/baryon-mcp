@@ -10,6 +10,7 @@ build:
 test:
 	@unformatted="$$(gofmt -l .)"; if [ -n "$$unformatted" ]; then echo "gofmt needed:"; echo "$$unformatted"; exit 1; fi
 	bash scripts/install_test.sh
+	bash scripts/render_server_json_test.sh
 	go vet ./...
 	go test -race ./...
 

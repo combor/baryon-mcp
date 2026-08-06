@@ -39,8 +39,9 @@ jobs:
             sudo apt-get update -qq
             sudo apt-get install -y -qq shellcheck
           fi
-          shellcheck scripts/install.sh scripts/install_test.sh
+          shellcheck scripts/install.sh scripts/install_test.sh scripts/render_server_json.sh scripts/render_server_json_test.sh
           bash scripts/install_test.sh
+          bash scripts/render_server_json_test.sh
       - name: gofmt
         run: |
           unformatted="$(gofmt -l .)"
@@ -174,3 +175,70 @@ jobs:
           published=$(jq -r '[.manifests[] | select(.platform.os == "linux") | "\(.platform.os)/\(.platform.architecture)"] | sort | join(" ")' "$manifest")
           echo "published: $published"
           [ "$published" = "linux/amd64 linux/arm64" ] || exit 1
+
+  publish-registry:
+    name: Publish Official MCP Registry
+    needs:
+      - release
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Download released MCPB bundles
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/mcpb"
+          gh release download "$GITHUB_REF_NAME" --pattern '*.mcpb' --dir "$RUNNER_TEMP/mcpb"
+      - name: Generate registry manifest
+        run: |
+          mkdir -p "$RUNNER_TEMP/mcp-registry"
+          scripts/render_server_json.sh \
+            "${GITHUB_REF_NAME#v}" \
+            "$RUNNER_TEMP/mcpb" \
+            "$RUNNER_TEMP/mcp-registry/server.json"
+      - name: Install mcp-publisher
+        run: |
+          archive="$RUNNER_TEMP/mcp-publisher_linux_amd64.tar.gz"
+          curl --fail --location --retry 3 \
+            https://github.com/modelcontextprotocol/registry/releases/download/v1.8.0/mcp-publisher_linux_amd64.tar.gz \
+            --output "$archive"
+          echo "1370446bbe74d562608e8005a6ccce02d146a661fbd78674e11cc70b9618d6cf  $archive" \
+            | sha256sum --check -
+          tar -xzf "$archive" -C "$RUNNER_TEMP" mcp-publisher
+      - id: registry_version
+        name: Check existing registry version
+        run: |
+          manifest="$RUNNER_TEMP/mcp-registry/server.json"
+          name=$(jq -r .name "$manifest")
+          version=$(jq -r .version "$manifest")
+          name_path=$(jq -rn --arg value "$name" '$value | @uri')
+          version_path=$(jq -rn --arg value "$version" '$value | @uri')
+          record="$RUNNER_TEMP/mcp-registry/record.json"
+          status=$(curl --silent --show-error --output "$record" --write-out '%{http_code}' \
+            "https://registry.modelcontextprotocol.io/v0.1/servers/$name_path/versions/$version_path")
+          case "$status" in
+            200)
+              jq -S . "$manifest" >"$RUNNER_TEMP/mcp-registry/expected.json"
+              jq -S .server "$record" >"$RUNNER_TEMP/mcp-registry/actual.json"
+              cmp "$RUNNER_TEMP/mcp-registry/expected.json" "$RUNNER_TEMP/mcp-registry/actual.json"
+              echo "publish=false" >>"$GITHUB_OUTPUT"
+              ;;
+            404)
+              echo "publish=true" >>"$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "registry lookup returned HTTP $status" >&2
+              exit 1
+              ;;
+          esac
+      - name: Authenticate to MCP Registry
+        if: steps.registry_version.outputs.publish == 'true'
+        run: '"$RUNNER_TEMP/mcp-publisher" login github-oidc'
+      - name: Publish server to MCP Registry
+        if: steps.registry_version.outputs.publish == 'true'
+        run: '"$RUNNER_TEMP/mcp-publisher" publish "$RUNNER_TEMP/mcp-registry/server.json"'
