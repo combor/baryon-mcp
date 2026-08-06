@@ -47,6 +47,72 @@ func TestLoadMissingCredentials(t *testing.T) {
 	}
 }
 
+func TestLoadUnconfiguredIntrospection(t *testing.T) {
+	t.Run("opt-in without credentials", func(t *testing.T) {
+		cfg, err := Load(env(map[string]string{"BARYON_ALLOW_UNCONFIGURED_INTROSPECTION": "true"}))
+		if err != nil {
+			t.Fatalf("Load: %v", err)
+		}
+		if !cfg.Unconfigured {
+			t.Error("want Unconfigured=true")
+		}
+	})
+
+	t.Run("credentials still required without the opt-in", func(t *testing.T) {
+		for _, v := range []string{"", "false"} {
+			m := map[string]string{"BARYON_ALLOW_UNCONFIGURED_INTROSPECTION": v}
+			if _, err := Load(env(m)); err == nil || !strings.Contains(err.Error(), "PROTON_BRIDGE_USERNAME") {
+				t.Errorf("opt-in %q: got err %v, want the username requirement", v, err)
+			}
+		}
+	})
+
+	t.Run("one credential fails", func(t *testing.T) {
+		for _, missing := range []string{"PROTON_BRIDGE_USERNAME", "PROTON_BRIDGE_PASSWORD"} {
+			m := validEnv()
+			delete(m, missing)
+			m["BARYON_ALLOW_UNCONFIGURED_INTROSPECTION"] = "true"
+			if _, err := Load(env(m)); err == nil || !strings.Contains(err.Error(), missing) {
+				t.Errorf("missing %s: got err %v, want it still required", missing, err)
+			}
+		}
+	})
+
+	t.Run("complete credentials stay configured", func(t *testing.T) {
+		m := validEnv()
+		m["BARYON_ALLOW_UNCONFIGURED_INTROSPECTION"] = "true"
+		cfg, err := Load(env(m))
+		if err != nil || cfg.Unconfigured {
+			t.Errorf("got (%+v, %v), want a configured server", cfg, err)
+		}
+	})
+
+	t.Run("malformed opt-in fails", func(t *testing.T) {
+		m := validEnv()
+		m["BARYON_ALLOW_UNCONFIGURED_INTROSPECTION"] = "sure"
+		if _, err := Load(env(m)); err == nil {
+			t.Error("non-boolean opt-in: expected error")
+		}
+	})
+
+	// The fallback drops the credential requirement, nothing else.
+	t.Run("other settings are still validated", func(t *testing.T) {
+		for key, bad := range map[string]string{
+			"PROTON_BRIDGE_HOST":           "192.168.1.5",
+			"PROTON_BRIDGE_IMAP_PORT":      "70000",
+			"PROTON_BRIDGE_IMAP_SECURITY":  "ssl",
+			"PROTON_BRIDGE_ALLOW_INSECURE": "maybe",
+			"PROTON_BRIDGE_TLS_CERT":       filepath.Join(t.TempDir(), "missing.pem"),
+			"BARYON_ATTACHMENT_ROOTS":      "relative/dir",
+		} {
+			m := map[string]string{"BARYON_ALLOW_UNCONFIGURED_INTROSPECTION": "true", key: bad}
+			if _, err := Load(env(m)); err == nil || !strings.Contains(err.Error(), key) {
+				t.Errorf("%s=%q: got err %v, want rejection", key, bad, err)
+			}
+		}
+	})
+}
+
 func TestLoadHostValidation(t *testing.T) {
 	accepted := []string{"localhost", "LocalHost", "127.0.0.1", "127.1.2.3", "::1"}
 	for _, h := range accepted {

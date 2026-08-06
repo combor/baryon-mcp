@@ -155,6 +155,39 @@ The installers protect Bridge credentials as follows:
 - Linux: separate mode-600 files under `$XDG_CONFIG_HOME/baryon-mcp` (default `~/.config/baryon-mcp`).
 - Windows: current-user DPAPI encryption under `%LOCALAPPDATA%\baryon-mcp`.
 
+### Docker on Linux
+
+`ghcr.io/combor/baryon-mcp` is published for `linux/amd64` and `linux/arm64`. It exists so MCP directories can start the server and read its tool schemas, and so Linux users can run Baryon in a container. On macOS and Windows use the native binaries: Docker Desktop does not share the host loopback interface that Bridge listens on.
+
+Baryon speaks stdio, so the client launches the container rather than connecting to a port:
+
+```json
+{
+  "mcpServers": {
+    "baryon": {
+      "command": "docker",
+      "args": [
+        "run", "--rm", "-i",
+        "--network=host",
+        "--user", "1000:1000",
+        "--env-file", "/absolute/path/to/baryon.env",
+        "-v", "/absolute/path/to/cert.pem:/run/secrets/bridge-cert.pem:ro",
+        "-v", "/absolute/path/to/attachments:/attachments",
+        "-e", "PROTON_BRIDGE_TLS_CERT=/run/secrets/bridge-cert.pem",
+        "-e", "BARYON_ATTACHMENT_ROOTS=/attachments",
+        "ghcr.io/combor/baryon-mcp:latest"
+      ]
+    }
+  }
+}
+```
+
+- `--network=host` is required. Bridge listens on the host's loopback interface, and Baryon refuses to send credentials to any other address.
+- Keep `PROTON_BRIDGE_USERNAME` and `PROTON_BRIDGE_PASSWORD` in the env file and supply them at run time. It holds the Bridge password in plain text, so create it outside any repository and `chmod 600` it. Never bake credentials into an image or commit them in a Compose file.
+- Replace `1000:1000` with your own `id -u` and `id -g`. Bind mounts keep host ownership, so without `--user` the container runs as UID 65532 and cannot read a mode-0600 certificate or write into your attachment directory. `save_attachment` creates files mode 0600 owned by whichever UID the container ran as, so running as yourself keeps them readable.
+- Anyone who can reach the Docker daemon can read a running container's environment. On a desktop, prefer the native installers, which keep credentials in the OS keychain, in DPAPI, or in mode-600 files.
+- With both credentials absent the image still starts and serves tool schemas, so a directory can inspect it; every tool call then reports the missing configuration. Supplying only one credential fails at startup.
+
 ## Security boundaries
 
 - Baryon refuses to send Bridge credentials to a non-loopback host.
@@ -197,8 +230,11 @@ The installers protect Bridge credentials as follows:
 | `PROTON_BRIDGE_TLS_CERT` | auto-detect | Path to Bridge's exported certificate |
 | `PROTON_BRIDGE_ALLOW_INSECURE` | `false` | Disable certificate verification; see the warning below |
 | `BARYON_ATTACHMENT_ROOTS` | unrestricted | Path-list-separated directories that `save_draft` may read from and `save_attachment` may write to |
+| `BARYON_ALLOW_UNCONFIGURED_INTROSPECTION` | `false` | Serve tool schemas with no credentials at all; set by the container image |
 
 Without an explicit or auto-discovered certificate, Baryon refuses to start unless `PROTON_BRIDGE_ALLOW_INSECURE=true`. Insecure mode allows another local process to impersonate Bridge and capture its generated password.
+
+`BARYON_ALLOW_UNCONFIGURED_INTROSPECTION=true` applies only when both credentials are absent, which is how a published image can be started and inspected without a mailbox. Every tool call then fails with a configuration error, and a half-configured server — one credential set, the other missing — still refuses to start.
 
 </details>
 
