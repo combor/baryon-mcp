@@ -43,6 +43,10 @@ type Config struct {
 	// AttachmentRoots limits save_draft content_path reads to these
 	// symlink-resolved directories; empty means any readable file.
 	AttachmentRoots []string
+	// Unconfigured reports that Username and Password are absent and the
+	// caller opted into serving MCP introspection without them. Bridge
+	// operations are unusable; everything else was still validated.
+	Unconfigured bool
 }
 
 // Addr returns the host:port dial address.
@@ -53,6 +57,10 @@ func (c *Config) Addr() string {
 // Load reads configuration using rawGetenv (usually os.Getenv; injectable for
 // tests). Empty values and unresolved MCPB config templates (a literal
 // "${...}" left by the host for an unset optional field) are treated as unset.
+//
+// Bridge credentials are required unless introspectionOnly applies, and every
+// other setting is validated either way: introspection-only mode drops the
+// credential requirement, not the rest of the validation.
 func Load(rawGetenv func(string) string) (*Config, error) {
 	getenv := func(key string) string {
 		v := rawGetenv(key)
@@ -70,11 +78,19 @@ func Load(rawGetenv func(string) string) (*Config, error) {
 		TLSCertPath: getenv("PROTON_BRIDGE_TLS_CERT"),
 	}
 
-	if cfg.Username == "" {
-		return nil, fmt.Errorf("PROTON_BRIDGE_USERNAME is required (Bridge's local IMAP username, shown in Bridge's mailbox settings)")
+	unconfigured, err := introspectionOnly(getenv)
+	if err != nil {
+		return nil, err
 	}
-	if cfg.Password == "" {
-		return nil, fmt.Errorf("PROTON_BRIDGE_PASSWORD is required (Bridge's generated password, not your Proton account password)")
+	cfg.Unconfigured = unconfigured
+
+	if !unconfigured {
+		if cfg.Username == "" {
+			return nil, fmt.Errorf("PROTON_BRIDGE_USERNAME is required (Bridge's local IMAP username, shown in Bridge's mailbox settings)")
+		}
+		if cfg.Password == "" {
+			return nil, fmt.Errorf("PROTON_BRIDGE_PASSWORD is required (Bridge's generated password, not your Proton account password)")
+		}
 	}
 
 	if cfg.Host == "" {
@@ -145,6 +161,26 @@ func Load(rawGetenv func(string) string) (*Config, error) {
 	}
 
 	return cfg, nil
+}
+
+// introspectionOnly reports whether the server may start with no Bridge
+// credentials at all, serving tool schemas to a client that only inspects
+// them. It is meant for container images published for MCP directory
+// validation, where no mailbox is reachable.
+//
+// Both credentials must be absent: with one of them set, the missing half is
+// a typo or a lost secret, and startup must fail rather than quietly degrade
+// into a server whose every call errors.
+func introspectionOnly(getenv func(string) string) (bool, error) {
+	v := getenv("BARYON_ALLOW_UNCONFIGURED_INTROSPECTION")
+	if v == "" {
+		return false, nil
+	}
+	allow, err := strconv.ParseBool(v)
+	if err != nil {
+		return false, fmt.Errorf("BARYON_ALLOW_UNCONFIGURED_INTROSPECTION %q is not a boolean", v)
+	}
+	return allow && getenv("PROTON_BRIDGE_USERNAME") == "" && getenv("PROTON_BRIDGE_PASSWORD") == "", nil
 }
 
 // isLoopback reports whether host is "localhost" or a loopback IP literal.

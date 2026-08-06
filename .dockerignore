@@ -1,0 +1,16 @@
+# The build context only needs the Go module and its sources. Everything named
+# here is either irrelevant to the build or local state that must not travel
+# into an image layer.
+.git
+.github
+/dist
+/graphify-out
+/baryon-mcp
+*.mcpb
+*.test
+*.out
+coverage.*
+*.env
+.DS_Store
+*.swp
+*~

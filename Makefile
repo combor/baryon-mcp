@@ -2,7 +2,7 @@ BINARY  := baryon-mcp
 VERSION ?= dev
 LDFLAGS := -s -w -X main.version=$(VERSION)
 
-.PHONY: build test snapshot clean
+.PHONY: build test docker-smoke snapshot clean
 
 build:
 	go build -ldflags '$(LDFLAGS)' -o $(BINARY) ./cmd/baryon-mcp
@@ -12,6 +12,13 @@ test:
 	bash scripts/install_test.sh
 	go vet ./...
 	go test -race ./...
+
+# Builds the container image and drives it through an MCP session with no
+# Bridge credentials. -count=1 keeps a cached pass from standing in for a run
+# against a freshly built image.
+docker-smoke:
+	docker build --build-arg VERSION=$(VERSION) -t $(BINARY):smoke .
+	BARYON_SMOKE_IMAGE=$(BINARY):smoke go test -count=1 -run TestContainerServesIntrospection ./cmd/baryon-mcp
 
 # Full local release dry-run: binaries, archives, and MCPB bundles into dist/.
 snapshot:

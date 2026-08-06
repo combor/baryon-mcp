@@ -35,6 +35,10 @@ jobs:
       - run: go mod download
       - name: Shell installer checks
         run: |
+          if ! command -v shellcheck >/dev/null; then
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq shellcheck
+          fi
           shellcheck scripts/install.sh scripts/install_test.sh
           bash scripts/install_test.sh
       - name: gofmt
@@ -56,12 +60,39 @@ jobs:
         shell: powershell
         run: .\scripts\install_windows_test.ps1
 
+  container-smoke:
+    name: Container Smoke Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+      - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+      - name: Build image
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: .
+          platforms: linux/amd64
+          load: true
+          tags: baryon-mcp:ci
+          build-args: VERSION=ci-${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: MCP introspection without credentials
+        env:
+          BARYON_SMOKE_IMAGE: baryon-mcp:ci
+        run: go test -count=1 -run TestContainerServesIntrospection ./cmd/baryon-mcp
+
   release:
     name: Release
     needs:
       - test
       - govulncheck
       - installer-windows
+      - container-smoke
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -83,3 +114,63 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  publish-container:
+    name: Publish Container Image
+    needs:
+      - release
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # The arm64 image is cross-compiled by Go and its runtime stage only
+      # copies that binary in, so no emulation is involved.
+      - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ghcr.io/combor/baryon-mcp
+          # A prerelease tag such as v0.4.0-rc1 must not move latest.
+          flavor: latest=false
+          tags: |
+            type=ref,event=tag
+            type=semver,pattern={{version}}
+            type=sha,format=long
+            type=raw,value=latest,enable=${{ !contains(github.ref_name, '-') }}
+      - id: build
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: VERSION=${{ steps.meta.outputs.version }}
+          provenance: mode=max
+          sbom: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Verify the published image is public
+        run: |
+          repo=combor/baryon-mcp
+          manifest=$RUNNER_TEMP/ghcr-manifest.json
+          if ! curl -fsSL "https://ghcr.io/token?service=ghcr.io&scope=repository:$repo:pull" -o "$RUNNER_TEMP/ghcr-token.json"; then
+            echo "anonymous pull denied: set the GHCR package to public in its settings, then re-run this job"
+            exit 1
+          fi
+          token=$(jq -r .token "$RUNNER_TEMP/ghcr-token.json")
+          curl -fsSL -H "Authorization: Bearer $token" \
+            -H "Accept: application/vnd.oci.image.index.v1+json" \
+            "https://ghcr.io/v2/$repo/manifests/${{ steps.build.outputs.digest }}" >"$manifest"
+          published=$(jq -r '[.manifests[] | select(.platform.os == "linux") | "\(.platform.os)/\(.platform.architecture)"] | sort | join(" ")' "$manifest")
+          echo "published: $published"
+          [ "$published" = "linux/amd64 linux/arm64" ] || exit 1
