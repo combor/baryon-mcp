@@ -205,9 +205,9 @@ jobs:
         run: |
           archive="$RUNNER_TEMP/mcp-publisher_linux_amd64.tar.gz"
           curl --fail --location --retry 3 \
-            https://github.com/modelcontextprotocol/registry/releases/download/v1.8.0/mcp-publisher_linux_amd64.tar.gz \
+            https://github.com/modelcontextprotocol/registry/releases/download/v1.8.1/mcp-publisher_linux_amd64.tar.gz \
             --output "$archive"
-          echo "1370446bbe74d562608e8005a6ccce02d146a661fbd78674e11cc70b9618d6cf  $archive" \
+          echo "a06c9096dcb9727c13555b6be26c7effa707b01f06a4c561ba7a3635443cf2cc  $archive" \
             | sha256sum --check -
           tar -xzf "$archive" -C "$RUNNER_TEMP" mcp-publisher
       - id: registry_version
