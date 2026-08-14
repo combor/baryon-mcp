@@ -5,9 +5,6 @@ project_name: baryon-mcp
 before:
   hooks:
     - go mod tidy
-    # Warm the npx cache serially; concurrent post-build hooks otherwise race
-    # to install @anthropic-ai/mcpb on a cold cache and read torn modules.
-    - npx --yes @anthropic-ai/mcpb@2.1.2 --version
 
 builds:
   - id: baryon-mcp
@@ -30,10 +27,20 @@ builds:
     ignore:
       - goos: windows
         goarch: arm64
-    hooks:
-      # Packs each binary into an MCPB bundle.
-      post:
-        - cmd: ./scripts/mcpb-pack.sh {{ .Os }} {{ .Arch }} "{{ .Path }}" {{ .Version }}
+
+notarize:
+  macos:
+    - enabled: '{{ isEnvSet "MACOS_SIGN_P12" }}'
+      sign:
+        certificate: '{{ .Env.MACOS_SIGN_P12 }}'
+        password: '{{ .Env.MACOS_SIGN_PASSWORD }}'
+      notarize:
+        issuer_id: '{{ .Env.MACOS_NOTARY_ISSUER_ID }}'
+        key_id: '{{ .Env.MACOS_NOTARY_KEY_ID }}'
+        key: '{{ .Env.MACOS_NOTARY_KEY }}'
+        # Waiting for Apple's verdict keeps a rejected binary out of the archives.
+        wait: true
+        timeout: 20m
 
 archives:
   - formats:
@@ -67,9 +74,17 @@ aurs:
       install -Dm755 "./baryon-mcp" "${pkgdir}/usr/bin/baryon-mcp"
       install -Dm644 "./LICENSE" "${pkgdir}/usr/share/licenses/baryon-mcp-bin/LICENSE"
 
-release:
-  extra_files:
-    - glob: dist/mcpb/*.mcpb
+homebrew_casks:
+  - name: baryon-mcp
+    homepage: https://github.com/combor/baryon-mcp
+    description: Read Proton Mail and save drafts through your local Proton Mail Bridge.
+    repository:
+      owner: combor
+      name: homebrew-tap
+      branch: main
+      token: '{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}'
+    # A prerelease tag such as v0.4.0-rc1 must not become the cask's current version.
+    skip_upload: auto
 
 changelog:
   disable: true

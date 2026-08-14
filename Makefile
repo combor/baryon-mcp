@@ -24,6 +24,7 @@ docker-smoke:
 # Full local release dry-run: binaries, archives, and MCPB bundles into dist/.
 snapshot:
 	goreleaser release --snapshot --clean
+	scripts/mcpb-pack-all.sh
 
 clean:
 	rm -rf dist $(BINARY)
