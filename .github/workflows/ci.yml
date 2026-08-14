@@ -115,6 +115,8 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # SSH private key of the AUR account that owns baryon-mcp-bin.
+          AUR_KEY: ${{ secrets.AUR_KEY }}
 
   publish-container:
     name: Publish Container Image
