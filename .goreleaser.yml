@@ -86,5 +86,10 @@ homebrew_casks:
     # A prerelease tag such as v0.4.0-rc1 must not become the cask's current version.
     skip_upload: auto
 
+release:
+  # A retried release re-uploads the same asset names, which GitHub rejects
+  # unless the existing ones are replaced.
+  replace_existing_artifacts: true
+
 changelog:
   disable: true
