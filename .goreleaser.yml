@@ -57,6 +57,23 @@ checksum:
   name_template: '{{ .ProjectName }}_{{ .Version }}_SHA256SUMS'
   algorithm: sha256
 
+nfpms:
+  - id: baryon-mcp-rpm
+    package_name: baryon-mcp
+    ids:
+      - baryon-mcp
+    vendor: combor
+    homepage: https://github.com/combor/baryon-mcp
+    maintainer: 'combor <163394+combor@users.noreply.github.com>'
+    description: Read Proton Mail and save drafts through your local Proton Mail Bridge.
+    license: BSD-3-Clause
+    formats:
+      - rpm
+    bindir: /usr/bin
+    contents:
+      - src: LICENSE
+        dst: /usr/share/licenses/baryon-mcp/LICENSE
+
 aurs:
   - name: baryon-mcp-bin
     homepage: https://github.com/combor/baryon-mcp
