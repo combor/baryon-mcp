@@ -138,19 +138,12 @@ winget:
       - mcp
       - proton-mail
       - proton-mail-bridge
-    # A prerelease tag such as v0.4.0-rc1 must not be submitted to WinGet.
-    skip_upload: auto
+    # The release workflow validates and installs these manifests on Windows
+    # before it commits them to the fork and opens the upstream pull request.
+    skip_upload: true
     repository:
       owner: combor
       name: winget-pkgs
-      token: '{{ .Env.WINGET_GITHUB_TOKEN }}'
-      pull_request:
-        enabled: true
-        draft: false
-        base:
-          owner: microsoft
-          name: winget-pkgs
-          branch: master
 
 changelog:
   disable: true
