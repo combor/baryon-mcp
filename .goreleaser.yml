@@ -70,6 +70,9 @@ nfpms:
     formats:
       - rpm
     bindir: /usr/bin
+    rpm:
+      signature:
+        key_file: '{{ if isEnvSet "GPG_KEY_PATH" }}{{ .Env.GPG_KEY_PATH }}{{ end }}'
     contents:
       - src: LICENSE
         dst: /usr/share/licenses/baryon-mcp/LICENSE

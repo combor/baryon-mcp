@@ -38,6 +38,9 @@ go.work.sum
 /baryon-mcp
 /dist/
 
+# Release signing private key
+/rpm-signing-private.asc
+
 # Graphify local cache and machine-specific state
 /graphify-out/cache/
 /graphify-out/cost.json

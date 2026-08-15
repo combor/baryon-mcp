@@ -98,6 +98,16 @@ jobs:
         with:
           go-version-file: 'go.mod'
           cache: false
+      - name: Prepare RPM signing key
+        env:
+          RPM_GPG_PRIVATE_KEY: ${{ secrets.RPM_GPG_PRIVATE_KEY }}
+        run: |
+          if [ -z "$RPM_GPG_PRIVATE_KEY" ]; then
+            echo "RPM_GPG_PRIVATE_KEY is not configured"
+            exit 1
+          fi
+          umask 077
+          printf '%s\n' "$RPM_GPG_PRIVATE_KEY" > "$RUNNER_TEMP/rpm-signing-private.asc"
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
         with:
@@ -105,6 +115,8 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # OpenPGP private key materialized in the runner's temporary directory.
+          GPG_KEY_PATH: ${{ runner.temp }}/rpm-signing-private.asc
           # SSH private key of the AUR account that owns baryon-mcp-bin.
           AUR_KEY: ${{ secrets.AUR_KEY }}
           # The job's own token cannot write to combor/homebrew-tap, so the cask
