@@ -110,6 +110,9 @@ jobs:
           # The job's own token cannot write to combor/homebrew-tap, so the cask
           # needs a PAT with contents write access to that repository.
           HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+          # GoReleaser pushes the manifest to combor/winget-pkgs and opens a PR
+          # against microsoft/winget-pkgs, which requires a PAT for the fork.
+          WINGET_GITHUB_TOKEN: ${{ secrets.WINGET_GITHUB_TOKEN }}
           # Developer ID certificate and App Store Connect key used to sign and
           # notarize the darwin binaries.
           MACOS_SIGN_P12: ${{ secrets.MACOS_SIGN_P12 }}

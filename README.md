@@ -95,6 +95,12 @@ macOS:
 brew install --cask combor/tap/baryon-mcp
 ```
 
+Windows (after the generated manifest is accepted into the WinGet Community Repository):
+
+```powershell
+winget install --exact --id Combor.BaryonMCP
+```
+
 Arch Linux — [`baryon-mcp-bin`](https://aur.archlinux.org/packages/baryon-mcp-bin) from the AUR:
 
 ```sh
