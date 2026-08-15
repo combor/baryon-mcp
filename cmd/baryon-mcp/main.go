@@ -4,10 +4,13 @@ package main
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"log"
 	"os"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/urfave/cli/v3"
 
 	"github.com/combor/baryon-mcp/internal/bridgeclient"
 	"github.com/combor/baryon-mcp/internal/config"
@@ -24,36 +27,57 @@ func main() {
 	log.SetFlags(0)
 	log.SetOutput(os.Stderr)
 
-	if len(os.Args) > 1 {
-		switch os.Args[1] {
-		case "setup":
-			if err := setup.Run(os.Args[2:], os.Stdin, os.Stdout, os.Stderr); err != nil {
-				log.Fatalf("baryon-mcp setup: %v", err)
-			}
+	if err := rootCommand().Run(context.Background(), os.Args); err != nil {
+		// An ExitCoder carries its own message and status; anything else is
+		// a plain failure reported the way the server reports its own.
+		var exit cli.ExitCoder
+		if errors.As(err, &exit) {
+			cli.HandleExitCoder(err)
 			return
-		default:
-			log.Printf("baryon-mcp: unknown command %q", os.Args[1])
-			log.Print("usage: baryon-mcp          serve MCP over stdio")
-			log.Print("       baryon-mcp setup    store Bridge credentials and configure MCP clients")
-			os.Exit(2)
 		}
+		log.Fatalf("baryon-mcp: %v", err)
 	}
+}
 
+// rootCommand serves MCP over stdio when invoked bare, which is how every MCP
+// client launches it, and exposes the setup flow as a subcommand.
+func rootCommand() *cli.Command {
+	return &cli.Command{
+		Name:    "baryon-mcp",
+		Usage:   "Read Proton Mail and save drafts through your local Proton Mail Bridge",
+		Version: version,
+		// Usage and errors must never reach stdout, which carries the
+		// JSON-RPC stream.
+		Writer:    os.Stderr,
+		ErrWriter: os.Stderr,
+		Commands: []*cli.Command{
+			setup.Command(os.Stdin, os.Stdout, os.Stderr),
+		},
+		Action: func(ctx context.Context, cmd *cli.Command) error {
+			if cmd.Args().Len() > 0 {
+				return cli.Exit(fmt.Sprintf("baryon-mcp: unknown command %q; run `baryon-mcp setup` to configure, or launch it with no arguments to serve MCP over stdio", cmd.Args().First()), 2)
+			}
+			return serve(ctx)
+		},
+	}
+}
+
+// serve builds the MCP server and runs it over stdio until the client
+// disconnects.
+func serve(ctx context.Context) error {
 	// Environment variables win; credentials stored by `baryon-mcp setup`
 	// fill in whatever the environment leaves unset.
 	cfg, err := config.Load(credstore.Getenv(os.Getenv))
 	if err != nil {
-		log.Fatalf("baryon-mcp: %v", err)
+		return err
 	}
 
 	bridge, err := newBridge(cfg)
 	if err != nil {
-		log.Fatalf("baryon-mcp: %v", err)
+		return err
 	}
 
-	if err := newServer(bridge, cfg).Run(context.Background(), &mcp.StdioTransport{}); err != nil {
-		log.Fatalf("baryon-mcp: %v", err)
-	}
+	return newServer(bridge, cfg).Run(ctx, &mcp.StdioTransport{})
 }
 
 // newBridge returns the real Bridge client, or one that fails every call when

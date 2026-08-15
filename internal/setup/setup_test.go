@@ -382,8 +382,10 @@ func TestRunHelpSucceeds(t *testing.T) {
 	if err := r.run([]string{"-h"}); err != nil {
 		t.Fatalf("run -h: %v", err)
 	}
-	if !strings.Contains(stderr.String(), "Usage: baryon-mcp setup") {
-		t.Errorf("usage was not printed:\n%s", stderr.String())
+	for _, want := range []string{"USAGE:", "--capture-cert", "--skip-client-config"} {
+		if !strings.Contains(stderr.String(), want) {
+			t.Errorf("usage missing %q:\n%s", want, stderr.String())
+		}
 	}
 }
 
@@ -396,22 +398,62 @@ func TestRunRejectsUnknownClient(t *testing.T) {
 	}
 }
 
-func TestParseArgsDeduplicatesClients(t *testing.T) {
-	opts, err := parseArgs([]string{"--client", "claude", "--client", "claude"}, &bytes.Buffer{})
-	if err != nil {
+// A client named twice must be configured once.
+func TestRunDeduplicatesClients(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "baryon-mcp")
+	store := credstore.OpenWith(dir, newFakeKeyring())
+	if _, err := store.SaveCert(testCertPEM(t)); err != nil {
 		t.Fatal(err)
 	}
-	if len(opts.clients) != 1 || opts.clients[0] != "claude" {
-		t.Errorf("clients = %v", opts.clients)
+	if _, _, err := store.Save(credstore.Credentials{Username: "a@b.c", Password: "p"}); err != nil {
+		t.Fatal(err)
+	}
+	logPath := fakeClients(t, 1)
+
+	r, _, _ := testRunner(t, store, "", nil)
+	// Interleaved, not just adjacent: both forms must collapse to one pass.
+	if err := r.run([]string{"--client", "claude", "--client", "codex", "--client", "claude"}); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	log := clientLog(t, logPath)
+	if got := strings.Count(log, "claude:mcp add "); got != 1 {
+		t.Errorf("claude configured %d times:\n%s", got, log)
+	}
+	if got := strings.Count(log, "codex:mcp add "); got != 1 {
+		t.Errorf("codex configured %d times:\n%s", got, log)
 	}
 }
 
-func TestParseArgsDefaultsToBothClients(t *testing.T) {
-	opts, err := parseArgs(nil, &bytes.Buffer{})
-	if err != nil {
+// Without --client both supported clients are configured.
+func TestRunDefaultsToBothClients(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "baryon-mcp")
+	store := credstore.OpenWith(dir, newFakeKeyring())
+	if _, err := store.SaveCert(testCertPEM(t)); err != nil {
 		t.Fatal(err)
 	}
-	if strings.Join(opts.clients, " ") != defaultClients {
-		t.Errorf("clients = %v", opts.clients)
+	if _, _, err := store.Save(credstore.Credentials{Username: "a@b.c", Password: "p"}); err != nil {
+		t.Fatal(err)
+	}
+	logPath := fakeClients(t, 1)
+
+	r, _, _ := testRunner(t, store, "", nil)
+	if err := r.run(nil); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	log := clientLog(t, logPath)
+	for _, client := range strings.Fields(defaultClients) {
+		if !strings.Contains(log, client+":mcp add ") {
+			t.Errorf("%s was not configured:\n%s", client, log)
+		}
+	}
+}
+
+// An unexpected positional argument is a typo, not a client to configure.
+func TestRunRejectsPositionalArgument(t *testing.T) {
+	store := credstore.OpenWith(filepath.Join(t.TempDir(), "baryon-mcp"), newFakeKeyring())
+	r, _, _ := testRunner(t, store, "", nil)
+	err := r.run([]string{"stray"})
+	if err == nil || !strings.Contains(err.Error(), "unexpected argument") {
+		t.Fatalf("err = %v, want a rejection of the stray argument", err)
 	}
 }

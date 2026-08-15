@@ -13,14 +13,15 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"errors"
-	"flag"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 
+	"github.com/urfave/cli/v3"
 	"golang.org/x/term"
 
 	"github.com/combor/baryon-mcp/internal/bridgeclient"
@@ -68,14 +69,11 @@ type runner struct {
 	beforeRecheck func()
 }
 
-// Run executes the setup flow with the given arguments and streams.
-func Run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
-	store, err := credstore.Open()
-	if err != nil {
-		return err
-	}
+// Command returns the `setup` subcommand, bound to the process streams. The
+// credential store is opened when the command runs, so a misresolved home
+// directory is reported as a command failure rather than at wiring time.
+func Command(stdin io.Reader, stdout, stderr io.Writer) *cli.Command {
 	r := &runner{
-		store:    store,
 		stdin:    bufio.NewReader(stdin),
 		rawStdin: stdin,
 		stdout:   stdout,
@@ -83,19 +81,105 @@ func Run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 		procRoot: "/proc",
 		getenv:   os.Getenv,
 	}
-	return r.run(args)
+	return r.command()
 }
 
-func (r *runner) run(args []string) error {
-	opts, err := parseArgs(args, r.stderr)
-	if errors.Is(err, flag.ErrHelp) {
-		// The usage text is the requested output, not a failure.
-		return nil
+// command describes the subcommand and runs the flow with the parsed flags.
+func (r *runner) command() *cli.Command {
+	return &cli.Command{
+		Name:  "setup",
+		Usage: "Store Proton Bridge credentials and register MCP clients",
+		Description: "The Bridge password goes into the system keyring when one answers, and\n" +
+			"otherwise into a mode-600 file below the user's configuration directory.",
+		Reader: r.rawStdin,
+		// Help and errors go to stderr, as they do for the root command:
+		// stdout carries the server's JSON-RPC stream and, here, the flow's
+		// own summary.
+		Writer:    r.stderr,
+		ErrWriter: r.stderr,
+		Flags: []cli.Flag{
+			&cli.StringSliceFlag{
+				Name:      "client",
+				Usage:     "Configure `NAME` (claude or codex; repeatable, default: both)",
+				Validator: validateClients,
+			},
+			&cli.StringFlag{
+				Name:  "tls-cert",
+				Usage: "Proton Bridge exported cert.pem at `PATH`",
+			},
+			&cli.BoolFlag{
+				Name:  "capture-cert",
+				Usage: "Pin the running Bridge's certificate without prompting, replacing any stored pin",
+			},
+			&cli.BoolFlag{
+				Name:  "reset-credentials",
+				Usage: "Replace stored Bridge credentials",
+			},
+			&cli.BoolFlag{
+				Name:  "force-client-config",
+				Usage: "Replace existing baryon client entries",
+			},
+			&cli.BoolFlag{
+				Name:  "skip-client-config",
+				Usage: "Store credentials without configuring clients",
+			},
+		},
+		Action: func(_ context.Context, cmd *cli.Command) error {
+			if cmd.Args().Len() > 0 {
+				return fmt.Errorf("unexpected argument: %s", cmd.Args().First())
+			}
+			if r.store == nil {
+				store, err := credstore.Open()
+				if err != nil {
+					return err
+				}
+				r.store = store
+			}
+			return r.execute(optionsFrom(cmd))
+		},
 	}
-	if err != nil {
-		return err
-	}
+}
 
+// run parses args as the subcommand would and executes the flow.
+func (r *runner) run(args []string) error {
+	return r.command().Run(context.Background(), append([]string{"setup"}, args...))
+}
+
+// validateClients rejects unsupported client names up front, so a typo fails
+// before any credential is touched rather than silently configuring nothing.
+func validateClients(names []string) error {
+	for _, name := range names {
+		if !slices.Contains(strings.Fields(defaultClients), name) {
+			return fmt.Errorf("unsupported client %q (supported: %s)", name, defaultClients)
+		}
+	}
+	return nil
+}
+
+func optionsFrom(cmd *cli.Command) *options {
+	// Repeats are dropped wherever they appear, not just adjacently: naming
+	// a client twice must configure it once, and with --force-client-config
+	// a second pass would remove and re-add the entry just written.
+	var clients []string
+	for _, name := range cmd.StringSlice("client") {
+		if !slices.Contains(clients, name) {
+			clients = append(clients, name)
+		}
+	}
+	if len(clients) == 0 {
+		clients = strings.Fields(defaultClients)
+	}
+	return &options{
+		clients:           clients,
+		tlsCert:           cmd.String("tls-cert"),
+		captureCert:       cmd.Bool("capture-cert"),
+		resetCredentials:  cmd.Bool("reset-credentials"),
+		forceClientConfig: cmd.Bool("force-client-config"),
+		skipClientConfig:  cmd.Bool("skip-client-config"),
+	}
+}
+
+func (r *runner) execute(opts *options) error {
 	certPath, err := r.ensureCertificate(opts)
 	if err != nil {
 		return err
@@ -113,78 +197,6 @@ func (r *runner) run(args []string) error {
 	r.sayf("  server:      %s", serverPath)
 	r.sayf("  credentials: %s", credentialStore)
 	r.sayf("  certificate: %s", certPath)
-	return nil
-}
-
-func parseArgs(args []string, stderr io.Writer) (*options, error) {
-	opts := &options{}
-	fs := flag.NewFlagSet("baryon-mcp setup", flag.ContinueOnError)
-	fs.SetOutput(stderr)
-	fs.Usage = func() {
-		fmt.Fprint(stderr, `Store Proton Bridge credentials for baryon-mcp and register MCP clients.
-
-Usage: baryon-mcp setup [options]
-
-Options:
-  --client NAME          Configure claude or codex (repeatable; default: both)
-  --tls-cert PATH        Proton Bridge exported cert.pem
-  --capture-cert         Pin the running Bridge's certificate without prompting,
-                         replacing any stored pin
-  --reset-credentials    Replace stored Bridge credentials
-  --force-client-config  Replace existing baryon client entries
-  --skip-client-config   Store credentials without configuring clients
-  -h, --help             Show this help
-
-The Bridge password goes into the system keyring when one answers, and
-otherwise into a mode-600 file below the user's configuration directory.
-`)
-	}
-	fs.Var(clientList{&opts.clients}, "client", "")
-	fs.StringVar(&opts.tlsCert, "tls-cert", "", "")
-	fs.BoolVar(&opts.captureCert, "capture-cert", false, "")
-	fs.BoolVar(&opts.resetCredentials, "reset-credentials", false, "")
-	fs.BoolVar(&opts.forceClientConfig, "force-client-config", false, "")
-	fs.BoolVar(&opts.skipClientConfig, "skip-client-config", false, "")
-	if err := fs.Parse(args); err != nil {
-		return nil, err
-	}
-	if fs.NArg() > 0 {
-		fs.Usage()
-		return nil, fmt.Errorf("unexpected argument: %s", fs.Arg(0))
-	}
-	if len(opts.clients) == 0 {
-		opts.clients = strings.Fields(defaultClients)
-	}
-	return opts, nil
-}
-
-// clientList accumulates repeated --client flags, validating each name.
-type clientList struct{ names *[]string }
-
-func (l clientList) String() string {
-	if l.names == nil {
-		return ""
-	}
-	return strings.Join(*l.names, ",")
-}
-
-func (l clientList) Set(v string) error {
-	supported := false
-	for _, name := range strings.Fields(defaultClients) {
-		if v == name {
-			supported = true
-			break
-		}
-	}
-	if !supported {
-		return fmt.Errorf("unsupported client %q (supported: %s)", v, defaultClients)
-	}
-	for _, existing := range *l.names {
-		if existing == v {
-			return nil
-		}
-	}
-	*l.names = append(*l.names, v)
 	return nil
 }
 
