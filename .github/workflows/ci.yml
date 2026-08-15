@@ -160,17 +160,26 @@ jobs:
         with:
           name: winget-manifests
           path: winget-manifests
-      - name: Ensure WinGet is available
+      - name: Install WinGet
         shell: pwsh
+        env:
+          # The runner image ships a winget whose newest bundled manifest schema
+          # predates 1.12, so it reports a valid 1.12 schema header as a pattern
+          # mismatch warning. This is the release tag of the newest stable
+          # winget, pinned so neither a new image nor a new release can change
+          # what validates the manifests.
+          WINGET_VERSION: v1.29.280
         run: |
-          if (-not (Get-Command winget.exe -ErrorAction SilentlyContinue)) {
-            Install-Module -Name Microsoft.WinGet.Client -Repository PSGallery -Scope CurrentUser -Force
-            Import-Module Microsoft.WinGet.Client
-            Repair-WinGetPackageManager -Force -Latest
-          }
-          winget --info
+          Install-Module -Name Microsoft.WinGet.Client -Repository PSGallery -Scope CurrentUser -Force
+          Import-Module Microsoft.WinGet.Client
+          Repair-WinGetPackageManager -Force -Version $env:WINGET_VERSION
+          $info = winget --info | Out-String
           if ($LASTEXITCODE -ne 0) {
             throw "winget is not available"
+          }
+          Write-Host $info
+          if ($info -notmatch [regex]::Escape($env:WINGET_VERSION)) {
+            throw "expected winget $env:WINGET_VERSION"
           }
       - id: manifest
         name: Locate manifests and require schema 1.12
