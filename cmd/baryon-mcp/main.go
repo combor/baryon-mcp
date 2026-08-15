@@ -11,7 +11,9 @@ import (
 
 	"github.com/combor/baryon-mcp/internal/bridgeclient"
 	"github.com/combor/baryon-mcp/internal/config"
+	"github.com/combor/baryon-mcp/internal/credstore"
 	"github.com/combor/baryon-mcp/internal/mcptools"
+	"github.com/combor/baryon-mcp/internal/setup"
 )
 
 // version is overridden at build time via -ldflags "-X main.version=...".
@@ -22,7 +24,24 @@ func main() {
 	log.SetFlags(0)
 	log.SetOutput(os.Stderr)
 
-	cfg, err := config.Load(os.Getenv)
+	if len(os.Args) > 1 {
+		switch os.Args[1] {
+		case "setup":
+			if err := setup.Run(os.Args[2:], os.Stdin, os.Stdout, os.Stderr); err != nil {
+				log.Fatalf("baryon-mcp setup: %v", err)
+			}
+			return
+		default:
+			log.Printf("baryon-mcp: unknown command %q", os.Args[1])
+			log.Print("usage: baryon-mcp          serve MCP over stdio")
+			log.Print("       baryon-mcp setup    store Bridge credentials and configure MCP clients")
+			os.Exit(2)
+		}
+	}
+
+	// Environment variables win; credentials stored by `baryon-mcp setup`
+	// fill in whatever the environment leaves unset.
+	cfg, err := config.Load(credstore.Getenv(os.Getenv))
 	if err != nil {
 		log.Fatalf("baryon-mcp: %v", err)
 	}

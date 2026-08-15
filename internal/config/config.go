@@ -54,9 +54,15 @@ func (c *Config) Addr() string {
 	return net.JoinHostPort(c.Host, strconv.Itoa(c.Port))
 }
 
+// Unset reports whether a raw environment value counts as not provided: empty,
+// or an unresolved MCPB config template (a literal "${...}" left by the host
+// for an unset optional field).
+func Unset(raw string) bool {
+	return raw == "" || (strings.HasPrefix(raw, "${") && strings.HasSuffix(raw, "}"))
+}
+
 // Load reads configuration using rawGetenv (usually os.Getenv; injectable for
-// tests). Empty values and unresolved MCPB config templates (a literal
-// "${...}" left by the host for an unset optional field) are treated as unset.
+// tests). Values that Unset reports as not provided are treated as absent.
 //
 // Bridge credentials are required unless introspectionOnly applies, and every
 // other setting is validated either way: introspection-only mode drops the
@@ -64,7 +70,7 @@ func (c *Config) Addr() string {
 func Load(rawGetenv func(string) string) (*Config, error) {
 	getenv := func(key string) string {
 		v := rawGetenv(key)
-		if strings.HasPrefix(v, "${") && strings.HasSuffix(v, "}") {
+		if Unset(v) {
 			return ""
 		}
 		return v

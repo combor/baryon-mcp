@@ -2,6 +2,9 @@ package main
 
 import (
 	"context"
+	"errors"
+	"os"
+	"os/exec"
 	"strings"
 	"testing"
 
@@ -98,6 +101,48 @@ func TestIntrospectionRefusesToolCallsBeforeTouchingFiles(t *testing.T) {
 	text := res.Content[0].(*mcp.TextContent).Text
 	if !strings.Contains(text, bridgeclient.ErrUnconfigured.Error()) {
 		t.Errorf("error %q should report the missing configuration, not the filesystem", text)
+	}
+}
+
+// TestDispatch re-executes the test binary as main() with controlled
+// arguments: an unknown command must exit 2 with usage, and "setup" must
+// reach the setup flow (whose flag parser rejects the bogus flag).
+func TestDispatch(t *testing.T) {
+	if args := os.Getenv("BARYON_TEST_DISPATCH_ARGS"); args != "" {
+		os.Args = append([]string{"baryon-mcp"}, strings.Fields(args)...)
+		main()
+		return
+	}
+
+	run := func(args string) (string, int) {
+		t.Helper()
+		cmd := exec.Command(os.Args[0], "-test.run", "TestDispatch")
+		cmd.Env = append(os.Environ(), "BARYON_TEST_DISPATCH_ARGS="+args)
+		out, err := cmd.CombinedOutput()
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			return string(out), exitErr.ExitCode()
+		}
+		if err != nil {
+			t.Fatalf("re-exec: %v", err)
+		}
+		return string(out), 0
+	}
+
+	out, code := run("bogus")
+	if code != 2 {
+		t.Errorf("unknown command exited %d, want 2:\n%s", code, out)
+	}
+	if !strings.Contains(out, "unknown command") || !strings.Contains(out, "baryon-mcp setup") {
+		t.Errorf("unknown command did not print usage:\n%s", out)
+	}
+
+	out, code = run("setup --definitely-not-a-flag")
+	if code == 0 {
+		t.Errorf("setup with a bogus flag exited 0:\n%s", out)
+	}
+	if !strings.Contains(out, "baryon-mcp setup") {
+		t.Errorf("the setup flow was not dispatched:\n%s", out)
 	}
 }
 

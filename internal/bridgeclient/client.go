@@ -111,7 +111,7 @@ type tlsConfigHolder struct {
 // misconfiguration fails at startup with an actionable message, not on the
 // first tool call.
 func New(cfg *config.Config) (*Client, error) {
-	tlsCfg, source, err := buildTLSConfig(cfg.TLSCertPath, cfg.AllowInsecure, certProbePaths())
+	tlsCfg, source, err := buildTLSConfig(cfg.TLSCertPath, cfg.AllowInsecure, CertProbePaths())
 	if err != nil {
 		return nil, err
 	}

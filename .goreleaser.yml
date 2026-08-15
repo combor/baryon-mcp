@@ -71,6 +71,15 @@ aurs:
       - baryon-mcp
     conflicts:
       - baryon-mcp
+    # Any org.freedesktop.secrets provider lets setup store the Bridge
+    # password in a keyring instead of a mode-600 file.
+    optdepends:
+      - 'gnome-keyring: Secret Service keyring for the Bridge password (auto-unlocks at login)'
+      - 'kwallet: Secret Service provider on KDE Plasma'
+      - 'keepassxc: Secret Service provider while its database is unlocked'
+    # Post-install notice pointing at `baryon-mcp setup`, which stores the
+    # per-user Bridge credentials the package itself cannot create.
+    install: scripts/aur/baryon-mcp-bin.install
     package: |-
       install -Dm755 "./baryon-mcp" "${pkgdir}/usr/bin/baryon-mcp"
       install -Dm644 "./LICENSE" "${pkgdir}/usr/share/licenses/baryon-mcp-bin/LICENSE"
