@@ -271,10 +271,10 @@ func TestLoadTimesOutOnBlockedKeyring(t *testing.T) {
 	}
 }
 
-// install.sh writes both credential files; they must load as-is, and the
-// password file must win without the keyring ever being consulted — a locked
-// keyring must not block a file-configured machine.
-func TestLoadInstallerWrittenFiles(t *testing.T) {
+// Both credential files present must load as-is, with the password file
+// winning and the keyring never consulted — a locked keyring must not block a
+// file-configured machine.
+func TestLoadFromCredentialFiles(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "baryon-mcp")
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		t.Fatal(err)

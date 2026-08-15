@@ -33,14 +33,13 @@ jobs:
           go-version-file: 'go.mod'
           cache: true
       - run: go mod download
-      - name: Shell installer checks
+      - name: Shell script checks
         run: |
           if ! command -v shellcheck >/dev/null; then
             sudo apt-get update -qq
             sudo apt-get install -y -qq shellcheck
           fi
-          shellcheck scripts/install.sh scripts/install_test.sh scripts/render_server_json.sh scripts/render_server_json_test.sh scripts/mcpb-pack-all.sh
-          bash scripts/install_test.sh
+          shellcheck scripts/render_server_json.sh scripts/render_server_json_test.sh scripts/mcpb-pack-all.sh
           bash scripts/render_server_json_test.sh
       - name: gofmt
         run: |
@@ -50,16 +49,6 @@ jobs:
       - run: go test -race -cover ./...
       - name: Validate MCPB manifest
         run: npx --yes @anthropic-ai/mcpb@2.1.2 validate manifest.json
-
-  installer-windows:
-    name: Windows Installer
-    runs-on: windows-latest
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Test PowerShell installer
-        shell: powershell
-        run: .\scripts\install_windows_test.ps1
 
   container-smoke:
     name: Container Smoke Test
@@ -92,7 +81,6 @@ jobs:
     needs:
       - test
       - govulncheck
-      - installer-windows
       - container-smoke
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest

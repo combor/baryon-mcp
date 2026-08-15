@@ -1,9 +1,8 @@
 // Package setup implements `baryon-mcp setup`: it pins Bridge's TLS
 // certificate, stores the Bridge credentials the server later loads through
-// credstore, and registers the server with local MCP clients. It does for a
-// package-manager install what scripts/install.sh does for a downloaded one,
-// with the difference that clients are pointed at the binary itself — the
-// server reads the stored credentials natively, so no launcher script exists.
+// credstore, and registers the server with local MCP clients. Clients are
+// pointed at the binary itself: the server reads the stored credentials
+// natively, so no launcher script stands between them.
 package setup
 
 import (

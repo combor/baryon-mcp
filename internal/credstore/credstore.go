@@ -73,11 +73,10 @@ type Store struct {
 }
 
 // Dir returns the configuration directory,
-// ${XDG_CONFIG_HOME:-$HOME/.config}/baryon-mcp — the same location
-// install.sh uses on both Linux and macOS, so credentials written by the
-// installer are read without migration. The result is absolute: a relative
-// XDG_CONFIG_HOME would otherwise resolve against the working directory,
-// which differs between setup and a server launched by an MCP client.
+// ${XDG_CONFIG_HOME:-$HOME/.config}/baryon-mcp. The result is absolute: a
+// relative XDG_CONFIG_HOME would otherwise resolve against the working
+// directory, which differs between setup and a server launched by an MCP
+// client.
 func Dir() (string, error) {
 	if v := os.Getenv("XDG_CONFIG_HOME"); v != "" {
 		dir, err := filepath.Abs(filepath.Join(v, "baryon-mcp"))
@@ -160,9 +159,9 @@ func (s *Store) SaveCert(pemData []byte) (string, error) {
 
 // Load returns the stored credentials, or ok=false when the store holds
 // none. The password file wins over the keyring: Save leaves exactly one of
-// the two behind, so a present file means either the keyring was unavailable
-// at save time or an installer wrote it — and consulting a possibly locked
-// keyring first would block on an unlock prompt the file makes unnecessary.
+// the two behind, so a present file means the keyring was unavailable at save
+// time — and consulting a possibly locked keyring first would block on an
+// unlock prompt the file makes unnecessary.
 // Every keyring failure counts as "no stored credentials", never an error: a
 // container without D-Bus must start in introspection-only mode, not fail.
 func (s *Store) Load() (Credentials, bool) {
