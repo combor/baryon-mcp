@@ -11,11 +11,11 @@ import (
 	"runtime"
 )
 
-// certProbePaths returns well-known locations where an exported Bridge TLS
+// CertProbePaths returns well-known locations where an exported Bridge TLS
 // certificate might live. Bridge v3 keeps its certificate inside an encrypted
 // vault, so these usually only exist after the user runs Bridge's
 // "Export TLS certificate" — probing is a convenience, not the expected path.
-func certProbePaths() []string {
+func CertProbePaths() []string {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return nil
@@ -79,6 +79,19 @@ func buildTLSConfig(certPath string, allowInsecure bool, probePaths []string) (*
 
 	return nil, "", fmt.Errorf(
 		"no Bridge TLS certificate available: export it via Bridge's Settings → Export TLS certificate and set PROTON_BRIDGE_TLS_CERT to the cert.pem path, or set PROTON_BRIDGE_ALLOW_INSECURE=true to skip verification (accepts the risk that another local process impersonates Bridge)")
+}
+
+// ValidateCertificateFile reports whether path holds at least one parseable
+// PEM CERTIFICATE block — the exact material pinnedTLSConfig later accepts,
+// so a certificate that passes here cannot fail at connection time for
+// format reasons.
+func ValidateCertificateFile(path string) error {
+	pemData, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	_, err = parsePEMCertificates(pemData)
+	return err
 }
 
 // pinnedTLSConfig verifies the peer by comparing its certificate against the
