@@ -176,3 +176,73 @@ func TestWriteAttachmentFileEnforcesRoots(t *testing.T) {
 		t.Error("write escaped the root through a symlinked parent")
 	}
 }
+
+func TestWriteAttachmentFileResolvesRelativePathsInsideTheRoot(t *testing.T) {
+	root := t.TempDir()
+	roots := pinAttachmentRoots([]string{root})
+
+	saved, err := writeAttachmentFile("invoice.pdf", []byte("data"), roots)
+	if err != nil {
+		t.Fatalf("relative path: %v", err)
+	}
+	if want := filepath.Join(root, "invoice.pdf"); saved != want {
+		t.Errorf("saved to %q, want %q", saved, want)
+	}
+	if data, err := os.ReadFile(saved); err != nil || string(data) != "data" {
+		t.Errorf("file content = %q (%v)", data, err)
+	}
+
+	if err := os.Mkdir(filepath.Join(root, "sub"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := writeAttachmentFile(filepath.Join("sub", "nested.pdf"), []byte("x"), roots); err != nil {
+		t.Errorf("relative path into a subdirectory: %v", err)
+	}
+
+	for _, escape := range []string{"../escape.pdf", "sub/../../escape.pdf"} {
+		if _, err := writeAttachmentFile(escape, []byte("x"), roots); err == nil {
+			t.Errorf("%q escaped the root", escape)
+		}
+	}
+
+	// Without any root there is nothing to resolve a relative path against.
+	if _, err := writeAttachmentFile("invoice.pdf", []byte("x"), pinAttachmentRoots(nil)); err == nil {
+		t.Error("a relative path without roots must be refused")
+	}
+}
+
+func TestReadAttachmentFileResolvesRelativePathsInsideTheRoot(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "report.txt"), []byte("hello"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	roots := pinAttachmentRoots([]string{root})
+
+	path := "report.txt"
+	got, err := readAttachmentFile(0, draftAttachmentInput{ContentPath: &path}, roots)
+	if err != nil {
+		t.Fatalf("relative content_path: %v", err)
+	}
+	if string(got.Data) != "hello" || got.Filename != "report.txt" {
+		t.Errorf("attachment = %+v", got)
+	}
+
+	// A real, readable file just outside the root: the refusal must come from
+	// the boundary, not from the path failing to exist.
+	outside := filepath.Join(filepath.Dir(root), "secret.txt")
+	if err := os.WriteFile(outside, []byte("secret"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	escape := filepath.Join("..", "secret.txt")
+	_, err = readAttachmentFile(0, draftAttachmentInput{ContentPath: &escape}, roots)
+	if err == nil || !strings.Contains(err.Error(), "BARYON_ATTACHMENT_ROOTS") {
+		t.Errorf("relative content_path escaping the root: got %v, want a boundary refusal", err)
+	}
+}
+
+func TestWriteAttachmentFileNamesTheRequestedPathWhenItCannotResolve(t *testing.T) {
+	_, err := writeAttachmentFile("invoice.pdf", []byte("x"), pinAttachmentRoots(nil))
+	if err == nil || !strings.Contains(err.Error(), `"invoice.pdf"`) {
+		t.Errorf("error = %v, want it to name the path the caller asked for", err)
+	}
+}

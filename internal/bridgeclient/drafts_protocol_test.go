@@ -252,7 +252,7 @@ func TestProtocolSaveDraftReplacesUIDAndPreservesMessageID(t *testing.T) {
 	if got := draftMessageID(t, client, second.UID); got != messageID {
 		t.Errorf("replacement Message-ID = %q, want %q", got, messageID)
 	}
-	page, err := client.ListMessages(context.Background(), "Drafts", SearchCriteria{}, 10, 0)
+	page, err := client.ListMessages(context.Background(), "Drafts", SearchCriteria{}, PageRequest{Limit: 10})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -478,7 +478,7 @@ func TestProtocolSaveDraftRejectsMalformedThreadHeadersBeforeAppend(t *testing.T
 	if err == nil || !strings.Contains(err.Error(), "References") {
 		t.Fatalf("error = %v, want malformed References refusal", err)
 	}
-	page, err := client.ListMessages(context.Background(), "Drafts", SearchCriteria{}, 10, 0)
+	page, err := client.ListMessages(context.Background(), "Drafts", SearchCriteria{}, PageRequest{Limit: 10})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -502,7 +502,7 @@ func TestProtocolSaveDraftRejectsStaleOrMissingUIDBeforeAppend(t *testing.T) {
 		if err == nil {
 			t.Fatal("expected stale reference error")
 		}
-		page, err := client.ListMessages(context.Background(), "Drafts", SearchCriteria{}, 10, 0)
+		page, err := client.ListMessages(context.Background(), "Drafts", SearchCriteria{}, PageRequest{Limit: 10})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -528,7 +528,7 @@ func TestProtocolSaveDraftReportsCleanupFailure(t *testing.T) {
 	if second.PreviousDraftRemoved || !strings.Contains(second.Warning, "previous draft may remain") {
 		t.Errorf("replacement = %+v", second)
 	}
-	page, err := client.ListMessages(context.Background(), "Drafts", SearchCriteria{}, 10, 0)
+	page, err := client.ListMessages(context.Background(), "Drafts", SearchCriteria{}, PageRequest{Limit: 10})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -558,7 +558,7 @@ func TestProtocolSaveDraftAppendFailurePreservesPreviousDraft(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "appending draft") {
 		t.Fatalf("error = %v", err)
 	}
-	page, err := client.ListMessages(context.Background(), "Drafts", SearchCriteria{}, 10, 0)
+	page, err := client.ListMessages(context.Background(), "Drafts", SearchCriteria{}, PageRequest{Limit: 10})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -582,7 +582,7 @@ func TestProtocolSaveDraftRequiresUIDPlusBeforeMutation(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "UIDPLUS") {
 		t.Fatalf("error = %v", err)
 	}
-	page, err := client.ListMessages(context.Background(), "Drafts", SearchCriteria{}, 10, 0)
+	page, err := client.ListMessages(context.Background(), "Drafts", SearchCriteria{}, PageRequest{Limit: 10})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -628,7 +628,7 @@ func TestProtocolSaveDraftSerializesConcurrentReplacement(t *testing.T) {
 	if successes != 1 || failures != 1 {
 		t.Fatalf("successes=%d failures=%d", successes, failures)
 	}
-	page, err := client.ListMessages(context.Background(), "Drafts", SearchCriteria{}, 10, 0)
+	page, err := client.ListMessages(context.Background(), "Drafts", SearchCriteria{}, PageRequest{Limit: 10})
 	if err != nil {
 		t.Fatal(err)
 	}

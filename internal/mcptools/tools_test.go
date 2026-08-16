@@ -20,9 +20,9 @@ type fakeBridge struct {
 	page     *bridgeclient.MessagePage
 	pageErr  error
 	gotQuery struct {
-		folder        string
-		criteria      bridgeclient.SearchCriteria
-		limit, offset int
+		folder   string
+		criteria bridgeclient.SearchCriteria
+		page     bridgeclient.PageRequest
 	}
 
 	email    *bridgeclient.EmailContent
@@ -48,11 +48,10 @@ func (f *fakeBridge) ListFolders(ctx context.Context) ([]bridgeclient.Folder, er
 	return f.folders, f.foldersErr
 }
 
-func (f *fakeBridge) ListMessages(ctx context.Context, folder string, criteria bridgeclient.SearchCriteria, limit, offset int) (*bridgeclient.MessagePage, error) {
+func (f *fakeBridge) ListMessages(ctx context.Context, folder string, criteria bridgeclient.SearchCriteria, page bridgeclient.PageRequest) (*bridgeclient.MessagePage, error) {
 	f.gotQuery.folder = folder
 	f.gotQuery.criteria = criteria
-	f.gotQuery.limit = limit
-	f.gotQuery.offset = offset
+	f.gotQuery.page = page
 	if f.page == nil {
 		return &bridgeclient.MessagePage{}, f.pageErr
 	}

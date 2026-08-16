@@ -12,8 +12,11 @@ func TestUnavailableFailsEveryCall(t *testing.T) {
 	var b Bridge = Unavailable{}
 
 	calls := map[string]func() error{
-		"ListFolders":     func() error { _, err := b.ListFolders(ctx); return err },
-		"ListMessages":    func() error { _, err := b.ListMessages(ctx, "INBOX", SearchCriteria{}, 10, 0); return err },
+		"ListFolders": func() error { _, err := b.ListFolders(ctx); return err },
+		"ListMessages": func() error {
+			_, err := b.ListMessages(ctx, "INBOX", SearchCriteria{}, PageRequest{Limit: 10})
+			return err
+		},
 		"GetEmail":        func() error { _, err := b.GetEmail(ctx, "INBOX", 1, 1); return err },
 		"GetThread":       func() error { _, err := b.GetThread(ctx, ThreadRef{}); return err },
 		"ListAttachments": func() error { _, err := b.ListAttachments(ctx, "INBOX", 1, 1); return err },

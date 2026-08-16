@@ -54,9 +54,9 @@ func readAttachmentFile(index int, in draftAttachmentInput, roots attachmentRoot
 	if runtime.GOOS == "windows" {
 		return bridgeclient.DraftAttachment{}, fmt.Errorf("attachment %d content_path is not supported on Windows; use content_base64", index)
 	}
-	path := *in.ContentPath
-	if !filepath.IsAbs(path) {
-		return bridgeclient.DraftAttachment{}, fmt.Errorf("attachment %d content_path %q is not an absolute path", index, path)
+	path, ok := roots.resolve(*in.ContentPath)
+	if !ok {
+		return bridgeclient.DraftAttachment{}, fmt.Errorf("attachment %d content_path %q is not an absolute path, and this server has no attachment directory to resolve it against", index, *in.ContentPath)
 	}
 	// Refuse UNC and \\?\-style paths before any filesystem call: on Windows
 	// merely resolving them can authenticate to a remote SMB host.

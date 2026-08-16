@@ -179,6 +179,11 @@ func optionsFrom(cmd *cli.Command) *options {
 }
 
 func (r *runner) execute(opts *options) error {
+	// The policy variables travel into the client entry, so a value the server
+	// would reject must fail before anything is written.
+	if _, err := r.bridgeEndpointWithRoots(); err != nil {
+		return err
+	}
 	certPath, err := r.ensureCertificate(opts)
 	if err != nil {
 		return err
@@ -196,7 +201,25 @@ func (r *runner) execute(opts *options) error {
 	r.sayf("  server:      %s", serverPath)
 	r.sayf("  credentials: %s", credentialStore)
 	r.sayf("  certificate: %s", certPath)
+	r.sayf("  attachments: %s", r.attachmentBoundary())
 	return nil
+}
+
+// attachmentBoundary is where the attachment tools may read and write,
+// resolved as the server resolves it.
+func (r *runner) attachmentBoundary() string {
+	cfg, err := r.bridgeEndpointWithRoots()
+	if err != nil {
+		return "unresolved"
+	}
+	if len(cfg.AttachmentRoots) > 0 {
+		return strings.Join(cfg.AttachmentRoots, string(os.PathListSeparator)) + " (BARYON_ATTACHMENT_ROOTS)"
+	}
+	// Only a platform whose attachment tools refuse local paths has none.
+	if cfg.ManagedAttachmentRoot == "" {
+		return "local file paths are not supported on this platform"
+	}
+	return cfg.ManagedAttachmentRoot + " (created when the server starts)"
 }
 
 // ensureCertificate resolves a certificate, trying in order: an explicit
@@ -330,17 +353,29 @@ func (r *runner) captureCertificate(opts *options) (string, error) {
 // target the endpoint the server is later going to dial, including any
 // PROTON_BRIDGE_HOST/PORT/SECURITY overrides in the environment.
 func (r *runner) bridgeEndpoint() (*config.Config, error) {
+	return r.loadConfig(true)
+}
+
+// bridgeEndpointWithRoots also validates the attachment boundary.
+func (r *runner) bridgeEndpointWithRoots() (*config.Config, error) {
+	return r.loadConfig(false)
+}
+
+func (r *runner) loadConfig(ignoreAttachmentRoots bool) (*config.Config, error) {
 	return config.Load(func(key string) string {
 		switch key {
 		case "PROTON_BRIDGE_USERNAME", "PROTON_BRIDGE_PASSWORD":
 			return "baryon-setup"
-		case "PROTON_BRIDGE_TLS_CERT", "BARYON_ATTACHMENT_ROOTS":
+		case "PROTON_BRIDGE_TLS_CERT":
 			// Validated against the filesystem by Load; a stale value must
 			// not block resolving the endpoint.
 			return ""
-		default:
-			return r.getenv(key)
+		case "BARYON_ATTACHMENT_ROOTS":
+			if ignoreAttachmentRoots {
+				return ""
+			}
 		}
+		return r.getenv(key)
 	})
 }
 
@@ -425,17 +460,20 @@ func (r *runner) configureClients(opts *options) (string, error) {
 	return exe, nil
 }
 
-// endpointOverrides returns the Bridge endpoint variables set in setup's own
-// environment as KEY=VALUE pairs. They travel into the client entry so that a
-// client process, which never sees setup's environment, dials the endpoint
-// whose certificate was pinned. Credentials are excluded: those live in the
-// store precisely so no client configuration file holds them.
+// endpointOverrides returns the non-secret Bridge and policy variables set in
+// setup's own environment as KEY=VALUE pairs. They travel into the client entry
+// so a client process, which never sees setup's environment, dials the endpoint
+// whose certificate was pinned and runs under the same scope. Credentials are
+// excluded: those live in the store precisely so no client file holds them.
 func (r *runner) endpointOverrides() []string {
 	var env []string
 	for _, key := range []string{
 		"PROTON_BRIDGE_HOST",
 		"PROTON_BRIDGE_IMAP_PORT",
 		"PROTON_BRIDGE_IMAP_SECURITY",
+		"BARYON_SENDER_IDENTITIES",
+		"BARYON_ALLOWED_FOLDERS",
+		"BARYON_ATTACHMENT_ROOTS",
 	} {
 		if v := r.getenv(key); !config.Unset(v) {
 			env = append(env, key+"="+v)

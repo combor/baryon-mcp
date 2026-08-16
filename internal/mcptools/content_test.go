@@ -315,3 +315,33 @@ func TestAttachmentToolAnnotationsSplitReadAndWrite(t *testing.T) {
 		t.Error("save_attachment never overwrites, so it should not claim destructiveness")
 	}
 }
+
+func TestGetEmailExposesSenderAndReplyTo(t *testing.T) {
+	fake := &fakeBridge{email: &bridgeclient.EmailContent{
+		Summary: bridgeclient.EmailSummary{
+			Subject: "Quarterly numbers",
+			From:    []string{`"Doe, Alice" <alice@example.org>`},
+			Sender:  []string{"secretary@example.org"},
+			ReplyTo: []string{"Replies <replies@example.org>"},
+			To:      []string{"me@proton.me"},
+		},
+		MessageID: "parent@example.org",
+	}}
+	session := newTestSession(t, fake)
+
+	res := callTool(t, session, "get_email", msgRefArgs())
+	raw, _ := json.Marshal(res.StructuredContent)
+	var out getEmailOutput
+	if err := json.Unmarshal(raw, &out); err != nil {
+		t.Fatal(err)
+	}
+	if len(out.Sender) != 1 || out.Sender[0] != "secretary@example.org" {
+		t.Errorf("sender = %q", out.Sender)
+	}
+	if len(out.ReplyTo) != 1 || out.ReplyTo[0] != "Replies <replies@example.org>" {
+		t.Errorf("reply_to = %q", out.ReplyTo)
+	}
+	if len(out.From) != 1 || out.From[0] != `"Doe, Alice" <alice@example.org>` {
+		t.Errorf("from = %q, want the address as the bridge formatted it", out.From)
+	}
+}

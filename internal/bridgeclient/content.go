@@ -59,8 +59,12 @@ type AttachmentContent struct {
 }
 
 // withMessage runs fn in a session with folder selected read-only and the
-// caller's uidvalidity verified against the live one.
+// caller's uidvalidity verified against the live one. A mailbox outside the
+// configured scope is refused before anything is opened.
 func (c *Client) withMessage(ctx context.Context, folder string, uidvalidity uint32, fn func(cli *imapclient.Client) error) error {
+	if err := c.policy.check(folder); err != nil {
+		return err
+	}
 	return c.withSession(ctx, func(cli *imapclient.Client) error {
 		sel, err := cli.Select(folder, &imap.SelectOptions{ReadOnly: true}).Wait()
 		if err != nil {

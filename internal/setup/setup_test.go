@@ -16,6 +16,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -455,5 +456,80 @@ func TestRunRejectsPositionalArgument(t *testing.T) {
 	err := r.run([]string{"stray"})
 	if err == nil || !strings.Contains(err.Error(), "unexpected argument") {
 		t.Fatalf("err = %v, want a rejection of the stray argument", err)
+	}
+}
+
+// The summary names where the attachment tools may read and write.
+func TestSetupReportsTheAttachmentBoundary(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the attachment tools refuse local paths on Windows")
+	}
+	store := credstore.OpenWith(filepath.Join(t.TempDir(), "baryon-mcp"), newFakeKeyring())
+	if _, err := store.SaveCert(testCertPEM(t)); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := store.Save(credstore.Credentials{Username: "alice@proton.me", Password: "pass"}); err != nil {
+		t.Fatal(err)
+	}
+
+	config := t.TempDir()
+	r, stdout, _ := testRunner(t, store, "", map[string]string{"XDG_CONFIG_HOME": config})
+	if err := r.run([]string{"--skip-client-config"}); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	managed := filepath.Join(config, "baryon-mcp", "attachments")
+	if !strings.Contains(stdout.String(), managed) {
+		t.Errorf("summary does not name the managed attachment directory %q:\n%s", managed, stdout.String())
+	}
+	if _, err := os.Stat(managed); !os.IsNotExist(err) {
+		t.Errorf("setup created %q; the server creates it when it starts", managed)
+	}
+
+	explicit := t.TempDir()
+	r, stdout, _ = testRunner(t, store, "", map[string]string{
+		"XDG_CONFIG_HOME":         config,
+		"BARYON_ATTACHMENT_ROOTS": explicit,
+	})
+	if err := r.run([]string{"--skip-client-config"}); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	resolved, _ := filepath.EvalSymlinks(explicit)
+	if !strings.Contains(stdout.String(), resolved) {
+		t.Errorf("summary does not name the configured root %q:\n%s", resolved, stdout.String())
+	}
+}
+
+// Setup writes the policy variables into the client entry, so it must refuse
+// a value the server would reject rather than report success.
+func TestRunRefusesPolicyTheServerWouldReject(t *testing.T) {
+	for name, bad := range map[string]map[string]string{
+		"malformed folder list":      {"BARYON_ALLOWED_FOLDERS": "INBOX\n\"unterminated"},
+		"malformed sender identity":  {"BARYON_SENDER_IDENTITIES": "not an address"},
+		"attachment root that is no": {"BARYON_ATTACHMENT_ROOTS": "relative/dir"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			store := credstore.OpenWith(filepath.Join(t.TempDir(), "baryon-mcp"), newFakeKeyring())
+			if _, err := store.SaveCert(testCertPEM(t)); err != nil {
+				t.Fatal(err)
+			}
+			if _, _, err := store.Save(credstore.Credentials{Username: "alice@proton.me", Password: "pass"}); err != nil {
+				t.Fatal(err)
+			}
+			logPath := fakeClients(t, 1)
+
+			r, stdout, _ := testRunner(t, store, "", bad)
+			err := r.run(nil)
+			if err == nil {
+				t.Fatalf("setup reported success:\n%s", stdout.String())
+			}
+			for key := range bad {
+				if !strings.Contains(err.Error(), key) {
+					t.Errorf("error %v should name %s", err, key)
+				}
+			}
+			if log := clientLog(t, logPath); strings.Contains(log, "mcp add") {
+				t.Errorf("a client was configured with the rejected value:\n%s", log)
+			}
+		})
 	}
 }

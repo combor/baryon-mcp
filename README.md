@@ -24,7 +24,7 @@ Baryon has no hosted service. You decide which MCP client and AI model receive y
 - Find messages by text, sender, recipient, subject, date, or unread state.
 - Read an email or an entire conversation.
 - Inspect, retrieve, and save attachments.
-- Prepare new messages and replies as Proton Mail drafts.
+- Prepare new messages as Proton Mail drafts.
 - Review, edit, and send those drafts yourself in Proton Mail.
 
 For example, you could ask your assistant:
@@ -46,6 +46,8 @@ For example, you could ask your assistant:
 | List and retrieve attachments | Yes |
 | Save attachments locally | Yes, on macOS and Linux |
 | Create and replace drafts | Yes |
+| Save a derived reply draft | Yes |
+| Restrict reading to chosen folders | Optional |
 | Send email | No |
 | Move ordinary messages | No |
 | Delete ordinary messages | No |
@@ -220,6 +222,7 @@ Baryon speaks stdio, so the client launches the container rather than connecting
 - `--network=host` is required. Bridge listens on the host's loopback interface, and Baryon refuses to send credentials to any other address.
 - Keep `PROTON_BRIDGE_USERNAME` and `PROTON_BRIDGE_PASSWORD` in the env file and supply them at run time. It holds the Bridge password in plain text, so create it outside any repository and `chmod 600` it. Never bake credentials into an image or commit them in a Compose file.
 - Replace `1000:1000` with your own `id -u` and `id -g`. Bind mounts keep host ownership, so without `--user` the container runs as UID 65532 and cannot read a mode-0600 certificate or write into your attachment directory. `save_attachment` creates files mode 0600 owned by whichever UID the container ran as, so running as yourself keeps them readable.
+- Keep `BARYON_ATTACHMENT_ROOTS` pointed at the mounted directory, as above. Without it the server creates its attachment directory under the container user's home, which a `--user` override usually cannot write to, and startup fails rather than falling back to unrestricted access.
 - Anyone who can reach the Docker daemon can read a running container's environment. On a desktop, prefer a native binary configured with `baryon-mcp setup`, which keeps credentials in the system keyring or in mode-600 files.
 - With both credentials absent the image still starts and serves tool schemas, so a directory can inspect it; every tool call then reports the missing configuration. Supplying only one credential fails at startup.
 
@@ -228,9 +231,12 @@ Baryon speaks stdio, so the client launches the container rather than connecting
 - Baryon refuses to send Bridge credentials to a non-loopback host.
 - Bridge's TLS certificate is pinned by default. Without a certificate, Baryon refuses to start unless insecure mode is explicitly enabled.
 - Read tools select mailboxes read-only and do not mark messages as read.
-- `save_draft` is the only tool that changes the mailbox. There are no send, move, general delete, or flag-changing tools.
+- `save_draft` and `save_reply_draft` are the only tools that change the mailbox, and only inside Drafts. There are no send, move, general delete, or flag-changing tools.
 - `save_attachment` is the only tool that writes to local disk. It never overwrites an existing file or creates a missing parent directory.
-- Local attachment reads and writes can be restricted to directories chosen with `BARYON_ATTACHMENT_ROOTS`.
+- Local attachment reads and writes are confined to a managed folder by default, or to the directories chosen with `BARYON_ATTACHMENT_ROOTS`.
+- Reading can be limited to an allowlist of folders with `BARYON_ALLOWED_FOLDERS`. A folder outside it is refused before the mailbox is opened, and never appears in `list_folders`.
+- Replies can only be sent from the addresses in `BARYON_SENDER_IDENTITIES`, and never carry the original message's Bcc recipients.
+- Message content is labelled `content_trust: "untrusted_email"` wherever it is returned, and fenced with an unguessable delimiter for clients that read only text blocks.
 - MCP clients can access the message content and attachments you request. Connect only clients and models you trust.
 
 ## Advanced reference
@@ -240,15 +246,17 @@ Baryon speaks stdio, so the client launches the container rather than connecting
 
 | Tool | Description |
 |---|---|
-| `list_folders` | List mailbox folders |
-| `list_emails` | List messages in a folder, newest first, with pagination |
+| `list_folders` | List the mailbox folders this server may read |
+| `list_emails` | List messages in a folder, newest first, with cursor pagination |
 | `search_emails` | Search by text, sender, recipient, subject, date, or unread state |
-| `get_email` | Read metadata, Bcc recipients, plain-text/HTML bodies, and attachment metadata |
+| `get_email` | Read metadata, Sender/Reply-To/Bcc addresses, plain-text/HTML bodies, and attachment metadata |
 | `get_thread` | Read a whole conversation from one of its messages, oldest first, optionally with shortened bodies |
 | `list_attachments` | List attachment metadata without downloading content |
 | `get_attachment` | Fetch one attachment into the conversation, up to 25 MB decoded |
 | `save_attachment` | Write one attachment to a local file and return only its path |
+| `list_sender_identities` | List the addresses a draft may be sent from |
 | `save_draft` | Create or replace a draft with text, HTML, Bcc recipients, and attachments from base64 or local file paths |
+| `save_reply_draft` | Save a reply to one message as a new draft, deriving recipients, subject and threading headers |
 
 </details>
 
@@ -264,8 +272,14 @@ Baryon speaks stdio, so the client launches the container rather than connecting
 | `PROTON_BRIDGE_IMAP_SECURITY` | `starttls` | `starttls` or `tls` |
 | `PROTON_BRIDGE_TLS_CERT` | auto-detect | Path to Bridge's exported certificate |
 | `PROTON_BRIDGE_ALLOW_INSECURE` | `false` | Disable certificate verification; see the warning below |
-| `BARYON_ATTACHMENT_ROOTS` | unrestricted | Path-list-separated directories that `save_draft` may read from and `save_attachment` may write to |
+| `BARYON_ATTACHMENT_ROOTS` | `${XDG_CONFIG_HOME:-~/.config}/baryon-mcp/attachments` | Path-list-separated directories that `save_draft` may read from and `save_attachment` may write to |
+| `BARYON_SENDER_IDENTITIES` | the Bridge username | Comma-separated RFC 5322 addresses a draft may be sent from; the first is the default |
+| `BARYON_ALLOWED_FOLDERS` | every folder | One CSV row of folder names the reading tools are limited to; quote a name containing a comma |
 | `BARYON_ALLOW_UNCONFIGURED_INTROSPECTION` | `false` | Serve tool schemas with no credentials at all; set by the container image |
+
+Baryon creates the default attachment directory at mode 0700 when it starts, and refuses to start if it cannot. Setting `BARYON_ATTACHMENT_ROOTS` replaces that default entirely — those directories must already exist. On Windows there is no attachment directory, because both file-touching tools refuse to run there.
+
+`BARYON_ALLOWED_FOLDERS` names must match Bridge's spelling exactly, except `INBOX`, which matches case-insensitively. Draft saving is outside this scope, so a reply can still be saved when Drafts is not on the list.
 
 Without an explicit or auto-discovered certificate, Baryon refuses to start unless `PROTON_BRIDGE_ALLOW_INSECURE=true`. Insecure mode allows another local process to impersonate Bridge and capture its generated password.
 
@@ -303,9 +317,28 @@ For reading mail:
 2. Call `list_emails` or `search_emails`.
 3. Pass the returned `folder`, `uid`, and `uidvalidity` to `get_email` or the attachment tools.
 
-Attachments come back in two ways. `get_attachment` returns the bytes inline—images as image content and other files as base64—which puts them in the conversation. `save_attachment` takes an absolute `output_path`, writes the decoded bytes there, and returns only the path, so a large attachment never reaches the model's context.
+Every summary carries the message's `message_id`, which correlates the same message across folders — the copy in `All Mail` and the copy in `INBOX` share it, while their UIDs do not.
 
-For `save_attachment`, the parent directory must already exist and the target file must not exist. When `BARYON_ATTACHMENT_ROOTS` is set, the path must fall inside an allowed directory. Both attachment tools are bounded at 25 MB decoded, so `save_attachment` removes the context cost, not the fetch cap.
+For the next page, pass the returned `next_before_uid` back as `before_uid`, together with `uidvalidity`. Mail arriving between two calls then cannot shift or repeat a result, which plain `offset` paging cannot promise. `offset` still works, but the two cannot be combined, and the call fails rather than paging a mailbox whose `uidvalidity` changed.
+
+Attachments come back in two ways. `get_attachment` returns the bytes inline—images as image content and other files as base64—which puts them in the conversation. `save_attachment` writes the decoded bytes to a path and returns only the path, so a large attachment never reaches the model's context.
+
+`output_path` may be relative, in which case it resolves inside the attachment directory, or absolute and inside it. The parent directory must already exist and the target file must not. Both attachment tools are bounded at 25 MB decoded, so `save_attachment` removes the context cost, not the fetch cap.
+
+</details>
+
+<details>
+<summary>Replying</summary>
+
+`save_reply_draft` answers one message. Pass the `folder`, `uid` and `uidvalidity` you read it with, plus the body; everything else is derived from the message:
+
+- **Recipients** come from its `Reply-To`, else its `From`, else its `Sender`. Your own addresses are removed and duplicates collapse. A message that names nobody else there — one of your own, or one forging your address — is refused rather than answered at the other recipients it lists; `save_draft` is where you name recipients yourself.
+- **`reply_all`** additionally copies its `To` and `Cc`. The original `Bcc` is never carried over; only a `bcc` you pass yourself is kept.
+- **`from`** must be one of `BARYON_SENDER_IDENTITIES` — call `list_sender_identities` to see them. Omitted, Baryon picks the identity the message was addressed to, then the one it was sent from, then the default.
+- **Subject** keeps an existing `Re:` prefix, in any case, or gains one.
+- **Threading** sets `In-Reply-To` to the parent's `Message-ID` and `References` to its chain followed by it. A message with no `Message-ID` is refused: it cannot be threaded correctly, and `save_draft` remains available for it.
+
+The original body is not quoted and its attachments are not copied — pass whatever the reply should contain. The response echoes every derived field, so the recipients can be reviewed before you send the draft from Proton Mail. `save_reply_draft` only ever creates a draft; replacing one stays with `save_draft`.
 
 </details>
 
@@ -317,11 +350,11 @@ For drafts, omit `uid` and `uidvalidity` to create one. To replace an existing d
 Each attachment supplies its content in exactly one of two ways:
 
 - `content_base64`: inline bytes, with `filename` and `content_type` required.
-- `content_path`: an absolute path to a regular file on the machine running Baryon. `filename` defaults to the path's basename and `content_type` is inferred from the extension.
+- `content_path`: a path to a regular file on the machine running Baryon, relative to the attachment directory or absolute and inside it. `filename` defaults to the path's basename and `content_type` is inferred from the extension.
 
 All attachments are read and validated before anything touches the mailbox, so a missing or unreadable file fails the call without creating or replacing a draft.
 
-To reply inside a thread, read the message being answered with `get_email`. Pass its `message_id` as `in_reply_to`, and its `references` followed by that same `message_id` as `references`. When the parent reports no `references`, use its `in_reply_to` in their place, as RFC 5322 section 3.6.4 prescribes.
+`save_reply_draft` derives a reply's threading for you. To thread one by hand, read the message being answered with `get_email`, then pass its `message_id` as `in_reply_to`, and its `references` followed by that same `message_id` as `references`. When the parent reports no `references`, use its `in_reply_to` in their place, as RFC 5322 section 3.6.4 prescribes.
 
 Angle brackets are optional on message identifiers, but each identifier must be a well-formed `id-left@id-right`. Baryon rejects anything it could not read back and strips the self-reference Bridge adds to `References`, so the chain it reports can be quoted as-is.
 
@@ -349,11 +382,13 @@ Baryon speaks MCP `2026-07-28` and negotiates down to any earlier revision back 
 <details>
 <summary>Detailed local-file protections</summary>
 
-`save_draft` with `content_path` reads local files with the server's privileges. It refuses anything but regular files after resolving symlinks. `BARYON_ATTACHMENT_ROOTS` optionally restricts which directories it may read; unset means any file your user account can read.
+The draft tools with `content_path` read local files with the server's privileges. They refuse anything but regular files after resolving symlinks. `save_attachment` never overwrites and creates no directories. Every read tool, including `get_attachment`, is annotated read-only.
 
-`save_attachment` never overwrites, creates no directories, and is confined by the same `BARYON_ATTACHMENT_ROOTS`. Unset means any path your user account can write. Every other read tool, including `get_attachment`, is annotated read-only.
+Both are confined to the same directories. Unset, that is the managed `${XDG_CONFIG_HOME:-~/.config}/baryon-mcp/attachments`, created at mode 0700 when the server starts; `BARYON_ATTACHMENT_ROOTS` replaces it with directories of your own, which must already exist. A relative path resolves inside the first of them, and an absolute path must fall inside one — a path escaping the boundary is refused rather than followed.
 
-Configured attachment roots are pinned by identity when the server starts. Replacing a configured root afterwards—renaming it and leaving a symlink in its place, for example—does not move the boundary. If every configured root becomes unreachable, both tools refuse all paths rather than falling back to unrestricted access.
+Attachment roots are pinned by identity when the server starts. Replacing a root afterwards—renaming it and leaving a symlink in its place, for example—does not move the boundary. If every root becomes unreachable, both tools refuse all paths rather than falling back to unrestricted access.
+
+**Upgrading from a release before the managed directory:** with `BARYON_ATTACHMENT_ROOTS` unset, `content_path` and `output_path` used to accept any absolute path the server's account could reach. They are now confined to the managed directory. To keep using other locations, set `BARYON_ATTACHMENT_ROOTS` explicitly; the Docker example above already does, so container users are unaffected.
 
 </details>
 

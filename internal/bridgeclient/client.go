@@ -84,7 +84,7 @@ type SavedDraft struct {
 // tests substitute a fake.
 type Bridge interface {
 	ListFolders(ctx context.Context) ([]Folder, error)
-	ListMessages(ctx context.Context, folder string, criteria SearchCriteria, limit, offset int) (*MessagePage, error)
+	ListMessages(ctx context.Context, folder string, criteria SearchCriteria, page PageRequest) (*MessagePage, error)
 	GetEmail(ctx context.Context, folder string, uid, uidvalidity uint32) (*EmailContent, error)
 	GetThread(ctx context.Context, ref ThreadRef) (*Thread, error)
 	ListAttachments(ctx context.Context, folder string, uid, uidvalidity uint32) ([]AttachmentInfo, error)
@@ -96,6 +96,7 @@ type Bridge interface {
 type Client struct {
 	cfg       *config.Config
 	tlsConfig *tlsConfigHolder
+	policy    folderPolicy
 	sem       chan struct{}
 	draftGate chan struct{}
 }
@@ -119,6 +120,7 @@ func New(cfg *config.Config) (*Client, error) {
 	return &Client{
 		cfg:       cfg,
 		tlsConfig: &tlsConfigHolder{config: tlsCfg, source: source},
+		policy:    folderPolicy{allowed: cfg.AllowedFolders},
 		sem:       make(chan struct{}, maxConcurrentConnections),
 		draftGate: make(chan struct{}, 1),
 	}, nil
@@ -207,7 +209,7 @@ func (c *Client) withSession(ctx context.Context, fn func(cli *imapclient.Client
 	return nil
 }
 
-// ListFolders returns all mailboxes via LIST "" "*".
+// ListFolders returns the mailboxes in scope via LIST "" "*".
 func (c *Client) ListFolders(ctx context.Context) ([]Folder, error) {
 	var folders []Folder
 	err := c.withSession(ctx, func(cli *imapclient.Client) error {
@@ -226,6 +228,7 @@ func (c *Client) ListFolders(ctx context.Context) ([]Folder, error) {
 			}
 			folders = append(folders, f)
 		}
+		folders = c.policy.filter(folders)
 		return nil
 	})
 	if err != nil {

@@ -163,7 +163,7 @@ func TestProtocolListFolders(t *testing.T) {
 func TestProtocolListMessagesPagination(t *testing.T) {
 	c := seedInbox(t)
 
-	page, err := c.ListMessages(context.Background(), "INBOX", SearchCriteria{}, 2, 0)
+	page, err := c.ListMessages(context.Background(), "INBOX", SearchCriteria{}, PageRequest{Limit: 2})
 	if err != nil {
 		t.Fatalf("ListMessages: %v", err)
 	}
@@ -180,7 +180,7 @@ func TestProtocolListMessagesPagination(t *testing.T) {
 		t.Errorf("UIDs not descending: %d, %d", page.Emails[0].UID, page.Emails[1].UID)
 	}
 
-	page, err = c.ListMessages(context.Background(), "INBOX", SearchCriteria{}, 2, 4)
+	page, err = c.ListMessages(context.Background(), "INBOX", SearchCriteria{}, PageRequest{Limit: 2, Offset: 4})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -188,7 +188,7 @@ func TestProtocolListMessagesPagination(t *testing.T) {
 		t.Errorf("offset page: total=%d emails=%+v", page.Total, page.Emails)
 	}
 
-	page, err = c.ListMessages(context.Background(), "INBOX", SearchCriteria{}, 2, 10)
+	page, err = c.ListMessages(context.Background(), "INBOX", SearchCriteria{}, PageRequest{Limit: 2, Offset: 10})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -199,7 +199,7 @@ func TestProtocolListMessagesPagination(t *testing.T) {
 
 func TestProtocolUnreadOnly(t *testing.T) {
 	c := seedInbox(t)
-	page, err := c.ListMessages(context.Background(), "INBOX", SearchCriteria{UnreadOnly: true}, 10, 0)
+	page, err := c.ListMessages(context.Background(), "INBOX", SearchCriteria{UnreadOnly: true}, PageRequest{Limit: 10})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -219,7 +219,7 @@ func TestProtocolUnreadOnly(t *testing.T) {
 func TestProtocolSearchCriteria(t *testing.T) {
 	c := seedInbox(t)
 
-	page, err := c.ListMessages(context.Background(), "INBOX", SearchCriteria{Subject: "Message 3"}, 10, 0)
+	page, err := c.ListMessages(context.Background(), "INBOX", SearchCriteria{Subject: "Message 3"}, PageRequest{Limit: 10})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -230,7 +230,7 @@ func TestProtocolSearchCriteria(t *testing.T) {
 		t.Errorf("from = %+v", page.Emails[0].From)
 	}
 
-	page, err = c.ListMessages(context.Background(), "INBOX", SearchCriteria{From: "bob@example.org"}, 10, 0)
+	page, err = c.ListMessages(context.Background(), "INBOX", SearchCriteria{From: "bob@example.org"}, PageRequest{Limit: 10})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -241,7 +241,7 @@ func TestProtocolSearchCriteria(t *testing.T) {
 
 func TestProtocolSelectMissingFolder(t *testing.T) {
 	c := seedInbox(t)
-	_, err := c.ListMessages(context.Background(), "NoSuchFolder", SearchCriteria{}, 10, 0)
+	_, err := c.ListMessages(context.Background(), "NoSuchFolder", SearchCriteria{}, PageRequest{Limit: 10})
 	if err == nil {
 		t.Fatal("expected error selecting missing folder")
 	}

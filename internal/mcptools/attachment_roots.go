@@ -41,6 +41,19 @@ func pinAttachmentRoots(roots []string) attachmentRoots {
 	return pinned
 }
 
+// resolve makes a caller-supplied path absolute, taking a relative one as
+// relative to the first root so a caller can name a file without knowing where
+// it lives. "../" then lands outside every root, which containment refuses.
+func (r attachmentRoots) resolve(path string) (string, bool) {
+	if filepath.IsAbs(path) {
+		return path, true
+	}
+	if len(r.dirs) == 0 {
+		return "", false
+	}
+	return filepath.Join(r.dirs[0].path, path), true
+}
+
 // bind opens the root containing target and returns target's path relative to
 // it. within reports containment and differs between reads (the target is the
 // file) and writes (the target is its parent directory). The os.Root handle is
