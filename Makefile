@@ -20,7 +20,7 @@ docker-smoke:
 	docker build --build-arg VERSION=$(VERSION) -t $(BINARY):smoke .
 	BARYON_SMOKE_IMAGE=$(BINARY):smoke go test -count=1 -run TestContainerServesIntrospection ./cmd/baryon-mcp
 
-# Full local release dry-run: binaries, archives, and MCPB bundles into dist/.
+# Full local release dry-run: binaries, archives, native packages, and MCPB bundles into dist/.
 snapshot:
 	goreleaser release --snapshot --clean
 	scripts/mcpb-pack-all.sh

@@ -67,7 +67,9 @@ nfpms:
     maintainer: 'combor <163394+combor@users.noreply.github.com>'
     description: Read Proton Mail and save drafts through your local Proton Mail Bridge.
     license: BSD-3-Clause
+    section: mail
     formats:
+      - deb
       - rpm
     bindir: /usr/bin
     rpm:
@@ -76,6 +78,10 @@ nfpms:
     contents:
       - src: LICENSE
         dst: /usr/share/licenses/baryon-mcp/LICENSE
+        packager: rpm
+      - src: LICENSE
+        dst: /usr/share/doc/baryon-mcp/copyright
+        packager: deb
 
 aurs:
   - name: baryon-mcp-bin
