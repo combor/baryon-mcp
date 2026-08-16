@@ -119,14 +119,14 @@ RPM-based Linux distributions (amd64 and arm64):
 sudo rpm --install ./baryon-mcp_*.rpm
 ```
 
-Anywhere else, download the archive for your platform from the [latest release](https://github.com/combor/baryon-mcp/releases/latest) and extract `baryon-mcp` onto your `PATH`. Releases provide macOS, Linux, and FreeBSD builds for amd64 and arm64, Windows amd64 builds, and DEB and RPM packages for Linux amd64 and arm64, alongside a `SHA256SUMS` file. Hash your download and compare it with the matching line in that file:
+Anywhere else, download the archive for your platform from the [latest release](https://github.com/combor/baryon-mcp/releases/latest) and extract `baryon-mcp` onto your `PATH`. Releases provide macOS, Linux, FreeBSD, and OpenBSD builds for amd64 and arm64, Windows amd64 builds, and DEB and RPM packages for Linux amd64 and arm64, alongside a `SHA256SUMS` file. Hash your download and compare it with the matching line in that file:
 
 ```sh
 sha256sum baryon-mcp_*.tar.gz            # Linux archive
 sha256sum baryon-mcp_*.deb               # Linux DEB
 sha256sum baryon-mcp_*.rpm               # Linux RPM
 shasum -a 256 baryon-mcp_*.tar.gz        # macOS
-sha256 baryon-mcp_*.tar.gz               # FreeBSD
+sha256 baryon-mcp_*.tar.gz               # FreeBSD and OpenBSD
 ```
 
 ```powershell
