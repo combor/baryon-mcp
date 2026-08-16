@@ -306,8 +306,8 @@ jobs:
             --search '"Combor.BaryonMCP" in:title' --limit 1 --json url \
             --jq '.[0].url // empty')
           if [ -n "$duplicate_url" ]; then
-            echo "another Combor.BaryonMCP pull request is already open: $duplicate_url" >&2
-            exit 1
+            echo "Skipping WinGet submission; another Combor.BaryonMCP pull request is already open: $duplicate_url"
+            exit 0
           fi
 
           repo=winget-pkgs
