@@ -18,7 +18,8 @@ import (
 // smoke test so both check the same list.
 var wantTools = []string{
 	"list_folders", "list_emails", "search_emails", "get_email", "get_thread",
-	"list_attachments", "get_attachment", "save_attachment", "save_draft",
+	"list_attachments", "get_attachment", "save_attachment",
+	"list_sender_identities", "save_draft", "save_reply_draft",
 }
 
 // introspectionSession connects an in-memory client to the server as it is
@@ -46,8 +47,8 @@ func introspectionSession(t *testing.T) *mcp.ClientSession {
 	return session
 }
 
-// The nine tools are what an MCP directory inspects an unconfigured image
-// for, so introspection-only mode must expose all of them.
+// The whole inventory is what an MCP directory inspects an unconfigured image
+// for, so introspection-only mode must expose all of it.
 func TestIntrospectionListsEveryTool(t *testing.T) {
 	res, err := introspectionSession(t).ListTools(context.Background(), nil)
 	if err != nil {

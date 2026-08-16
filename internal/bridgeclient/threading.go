@@ -113,10 +113,12 @@ func (t *threadHeaders) fillFromEnvelope(envelope *imap.Envelope) {
 		return
 	}
 	if t.messageID == "" {
-		t.messageID = envelope.MessageID
+		t.messageID = bareMsgID(envelope.MessageID)
 	}
 	if len(t.inReplyTo) == 0 {
-		t.inReplyTo = envelope.InReplyTo
+		for _, id := range envelope.InReplyTo {
+			t.inReplyTo = append(t.inReplyTo, bareMsgID(id))
+		}
 	}
 }
 

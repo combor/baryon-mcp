@@ -12,15 +12,16 @@ import (
 )
 
 type listAttachmentsOutput struct {
-	UID         uint32           `json:"uid"`
-	UIDValidity uint32           `json:"uidvalidity"`
-	Attachments []attachmentMeta `json:"attachments"`
+	UID          uint32           `json:"uid"`
+	UIDValidity  uint32           `json:"uidvalidity"`
+	ContentTrust string           `json:"content_trust" jsonschema:"always untrusted_email: filenames and content types are chosen by the sender"`
+	Attachments  []attachmentMeta `json:"attachments"`
 }
 
 func registerListAttachments(server *mcp.Server, bridge bridgeclient.Bridge) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "list_attachments",
-		Description: "List a message's attachments (filename, content type, encoded size) without transferring any content.",
+		Description: "List a message's attachments (filename, content type, encoded size) without transferring any content." + untrustedNote,
 		Annotations: readOnly("List attachments"),
 	}, func(ctx context.Context, req *mcp.CallToolRequest, in messageRef) (*mcp.CallToolResult, listAttachmentsOutput, error) {
 		if err := in.validate(); err != nil {
@@ -31,9 +32,10 @@ func registerListAttachments(server *mcp.Server, bridge bridgeclient.Bridge) {
 			return nil, listAttachmentsOutput{}, err
 		}
 		return nil, listAttachmentsOutput{
-			UID:         in.UID,
-			UIDValidity: in.UIDValidity,
-			Attachments: toAttachmentMetas(infos),
+			UID:          in.UID,
+			UIDValidity:  in.UIDValidity,
+			ContentTrust: contentTrustUntrusted,
+			Attachments:  toAttachmentMetas(infos),
 		}, nil
 	})
 }
@@ -48,13 +50,14 @@ type getAttachmentOutput struct {
 	ContentType      string `json:"content_type"`
 	EncodedSizeBytes uint32 `json:"encoded_size_bytes"`
 	DecodedSizeBytes int    `json:"decoded_size_bytes"`
+	ContentTrust     string `json:"content_trust" jsonschema:"always untrusted_email: the filename, content type and bytes all come from the sender"`
 	DataBase64       string `json:"data_base64,omitempty" jsonschema:"attachment bytes, base64; absent for images, which arrive as image content"`
 }
 
 func registerGetAttachment(server *mcp.Server, bridge bridgeclient.Bridge) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "get_attachment",
-		Description: "Fetch one attachment's content into the conversation (up to 25 MB decoded). Images are returned as image content; other files as base64 in the structured output alongside the metadata. For an attachment too large to be worth reading inline, use save_attachment instead.",
+		Description: "Fetch one attachment's content into the conversation (up to 25 MB decoded). Images are returned as image content; other files as base64 in the structured output alongside the metadata. For an attachment too large to be worth reading inline, use save_attachment instead." + untrustedNote,
 		Annotations: readOnly("Get attachment"),
 	}, func(ctx context.Context, req *mcp.CallToolRequest, in getAttachmentInput) (*mcp.CallToolResult, getAttachmentOutput, error) {
 		if err := in.validate(); err != nil {
@@ -70,20 +73,28 @@ func registerGetAttachment(server *mcp.Server, bridge bridgeclient.Bridge) {
 			ContentType:      att.ContentType,
 			EncodedSizeBytes: att.EncodedSize,
 			DecodedSizeBytes: len(att.Data),
+			ContentTrust:     contentTrustUntrusted,
 		}
 
 		// Images render via content blocks; anything else goes in the structured
 		// output, since clients that prefer structuredContent drop text blocks.
 		if strings.HasPrefix(att.ContentType, "image/") {
 			block := &mcp.ImageContent{Data: att.Data, MIMEType: att.ContentType}
+			// A legacy peer cannot read content_trust, and an image carries
+			// whatever the sender drew in it. Label it before the image.
+			if legacyContent(req) {
+				label := fenceUntrusted("EMAIL ATTACHMENT", fmt.Sprintf("%s (%s, %d bytes) follows as image content",
+					att.Filename, att.ContentType, len(att.Data)))
+				return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: label}, block}}, out, nil
+			}
 			return &mcp.CallToolResult{Content: []mcp.Content{block}}, out, nil
 		}
 		out.DataBase64 = base64.StdEncoding.EncodeToString(att.Data)
 		// Empty non-nil Content stops the SDK echoing the JSON into a redundant text block.
 		res := &mcp.CallToolResult{Content: []mcp.Content{}}
 		if legacyContent(req) {
-			res.Content = append(res.Content, &mcp.TextContent{Text: fmt.Sprintf("%s (%s, %d bytes), base64:\n%s",
-				att.Filename, att.ContentType, len(att.Data), out.DataBase64)})
+			res.Content = append(res.Content, &mcp.TextContent{Text: fenceUntrusted("EMAIL ATTACHMENT", fmt.Sprintf("%s (%s, %d bytes), base64:\n%s",
+				att.Filename, att.ContentType, len(att.Data), out.DataBase64))})
 		}
 		return res, out, nil
 	})
@@ -92,7 +103,7 @@ func registerGetAttachment(server *mcp.Server, bridge bridgeclient.Bridge) {
 type saveAttachmentInput struct {
 	messageRef
 	Index      int    `json:"index" jsonschema:"attachment index from list_attachments or get_email"`
-	OutputPath string `json:"output_path" jsonschema:"absolute path to write the decoded attachment to on the server's machine; the parent directory must already exist and the file must not; not available on Windows"`
+	OutputPath string `json:"output_path" jsonschema:"where to write the decoded attachment on the server's machine: a path relative to the server's attachment directory, or an absolute path inside it. The parent directory must already exist and the file must not; not available on Windows"`
 }
 
 type saveAttachmentOutput struct {
@@ -101,6 +112,7 @@ type saveAttachmentOutput struct {
 	EncodedSizeBytes uint32 `json:"encoded_size_bytes"`
 	DecodedSizeBytes int    `json:"decoded_size_bytes" jsonschema:"bytes written to disk"`
 	SavedPath        string `json:"saved_path" jsonschema:"symlink-resolved path the attachment was written to"`
+	ContentTrust     string `json:"content_trust" jsonschema:"always untrusted_email: the file now on disk holds bytes the sender chose"`
 }
 
 // saveAttachmentAnnotations claims neither read-only nor idempotent: this tool
@@ -120,7 +132,7 @@ func saveAttachmentAnnotations() *mcp.ToolAnnotations {
 func registerSaveAttachment(server *mcp.Server, bridge bridgeclient.Bridge, roots attachmentRoots) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "save_attachment",
-		Description: "Write one attachment (up to 25 MB decoded) to a local file on the server's machine and return only its path, keeping the bytes out of the conversation. Use this for attachments too large to read inline with get_attachment. An existing file is never overwritten and no directories are created.",
+		Description: "Write one attachment (up to 25 MB decoded) to a local file on the server's machine and return only its path, keeping the bytes out of the conversation. Use this for attachments too large to read inline with get_attachment. output_path may be relative, in which case it resolves inside the server's attachment directory. An existing file is never overwritten and no directories are created." + untrustedNote,
 		Annotations: saveAttachmentAnnotations(),
 	}, func(ctx context.Context, req *mcp.CallToolRequest, in saveAttachmentInput) (*mcp.CallToolResult, saveAttachmentOutput, error) {
 		if err := in.validate(); err != nil {
@@ -148,12 +160,14 @@ func registerSaveAttachment(server *mcp.Server, bridge bridgeclient.Bridge, root
 			EncodedSizeBytes: att.EncodedSize,
 			DecodedSizeBytes: len(att.Data),
 			SavedPath:        saved,
+			ContentTrust:     contentTrustUntrusted,
 		}
 		// Empty non-nil Content stops the SDK echoing the JSON into a redundant text block.
 		res := &mcp.CallToolResult{Content: []mcp.Content{}}
 		if legacyContent(req) {
-			res.Content = append(res.Content, &mcp.TextContent{Text: fmt.Sprintf("%s (%s, %d bytes) written to %s",
-				att.Filename, att.ContentType, len(att.Data), saved)})
+			// The filename and content type are the sender's words.
+			res.Content = append(res.Content, &mcp.TextContent{Text: fenceUntrusted("EMAIL ATTACHMENT", fmt.Sprintf("%s (%s, %d bytes) written to %s",
+				att.Filename, att.ContentType, len(att.Data), saved))})
 		}
 		return res, out, nil
 	})

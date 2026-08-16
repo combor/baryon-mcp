@@ -56,7 +56,7 @@ func seedThread(t *testing.T) *Client {
 // seedUID returns the UID and UIDVALIDITY of the message with the given subject.
 func seedUID(t *testing.T, c *Client, folder, subject string) (uint32, uint32) {
 	t.Helper()
-	page, err := c.ListMessages(context.Background(), folder, SearchCriteria{Subject: subject}, 10, 0)
+	page, err := c.ListMessages(context.Background(), folder, SearchCriteria{Subject: subject}, PageRequest{Limit: 10})
 	if err != nil {
 		t.Fatal(err)
 	}

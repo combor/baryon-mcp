@@ -5,7 +5,7 @@
   "display_name": "Baryon — Proton Mail via Bridge",
   "version": "0.1.0",
   "description": "Read Proton Mail and save drafts through your local Proton Mail Bridge.",
-  "long_description": "Baryon exposes your Proton Mail mailbox to MCP clients as nine tools: list folders, list/search emails, read a message, read a whole conversation, list, fetch and save attachments, and create or replace drafts. It talks IMAP to the Proton Mail Bridge running on your machine over loopback only, authenticates Bridge by pinning its TLS certificate, and keeps draft saving as its only mailbox write capability — it cannot send, move, or generally delete messages or change flags. To move file bytes past the conversation, save_draft can read attachment paths on your machine and save_attachment can write a fetched attachment to one, both optionally restricted to a folder you choose.",
+  "long_description": "Baryon exposes your Proton Mail mailbox to MCP clients as eleven tools: list folders, list/search emails, read a message, read a whole conversation, list, fetch and save attachments, list your sender addresses, and save a draft or a standards-correct reply draft. It talks IMAP to the Proton Mail Bridge running on your machine over loopback only, authenticates Bridge by pinning its TLS certificate, and keeps draft saving as its only mailbox write capability — it cannot send, move, or generally delete messages or change flags. Message content is labelled as sender-controlled in every response that carries it. Local file access is confined to a managed attachment folder by default, or to folders you choose, and reading can be restricted to a folder allowlist.",
   "author": {
     "name": "Piotr Komborski"
   },
@@ -29,7 +29,9 @@
         "PROTON_BRIDGE_IMAP_SECURITY": "${user_config.bridge_imap_security}",
         "PROTON_BRIDGE_TLS_CERT": "${user_config.bridge_tls_cert}",
         "PROTON_BRIDGE_ALLOW_INSECURE": "${user_config.bridge_allow_insecure}",
-        "BARYON_ATTACHMENT_ROOTS": "${user_config.attachment_root}"
+        "BARYON_ATTACHMENT_ROOTS": "${user_config.attachment_root}",
+        "BARYON_SENDER_IDENTITIES": "${user_config.sender_identities}",
+        "BARYON_ALLOWED_FOLDERS": "${user_config.allowed_folders}"
       }
     }
   },
@@ -80,22 +82,34 @@
     },
     "attachment_root": {
       "type": "directory",
-      "title": "Attachment folder restriction",
-      "description": "When set, save_draft may only attach files from inside this folder, and save_attachment may only write into it. Leave empty to allow any path your user account can read or write."
+      "title": "Attachment folder",
+      "description": "The only folder save_draft may attach files from and save_attachment may write into. Leave empty to use the managed folder inside baryon-mcp's own configuration directory, which the server creates for you."
+    },
+    "sender_identities": {
+      "type": "string",
+      "title": "Sender addresses",
+      "description": "Comma-separated addresses that replies may be sent from, most preferred first, for example \"Alice <alice@proton.me>, work@proton.me\". Leave empty to use the Bridge username."
+    },
+    "allowed_folders": {
+      "type": "string",
+      "title": "Readable folders",
+      "description": "Comma-separated folder names the reading tools are limited to, for example \"INBOX, Archive, All Mail\". Quote a name that contains a comma. Leave empty to allow every folder."
     }
   },
   "compatibility": {
     "platforms": ["darwin"]
   },
   "tools": [
-    { "name": "list_folders", "description": "List all folders in the mailbox" },
-    { "name": "list_emails", "description": "List messages in a folder, newest first, with pagination" },
+    { "name": "list_folders", "description": "List the folders in the mailbox that this server may read" },
+    { "name": "list_emails", "description": "List messages in a folder, newest first, with stable cursor pagination" },
     { "name": "search_emails", "description": "Search messages by text, sender, recipient, subject, date range, or unread state" },
-    { "name": "get_email", "description": "Read one message's metadata, text bodies, and attachment list" },
+    { "name": "get_email", "description": "Read one message's metadata, reply addresses, text bodies, and attachment list" },
     { "name": "get_thread", "description": "Read a whole conversation from one of its messages, oldest first, optionally with shortened bodies" },
     { "name": "list_attachments", "description": "List a message's attachments without transferring content" },
     { "name": "get_attachment", "description": "Fetch one attachment (up to 25 MB decoded) into the conversation" },
     { "name": "save_attachment", "description": "Write one attachment to a local file and return only its path, keeping large attachments out of the conversation" },
-    { "name": "save_draft", "description": "Create or replace a draft, including a threaded reply, with plain text, optional HTML, and attachments from base64 or local file paths" }
+    { "name": "list_sender_identities", "description": "List the addresses a draft may be sent from" },
+    { "name": "save_draft", "description": "Create or replace a draft, including a threaded reply, with plain text, optional HTML, and attachments from base64 or local file paths" },
+    { "name": "save_reply_draft", "description": "Save a reply to one message as a new draft, deriving its recipients, subject and threading headers" }
   ]
 }

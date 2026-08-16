@@ -71,6 +71,14 @@ func serve(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	// Confine local file access before any tool can use it. Introspection-only
+	// mode refuses every tool call, so it takes the boundary without creating
+	// the directory: a published image must still start read-only.
+	if cfg.Unconfigured {
+		cfg.ConfineUnusedAttachmentRoot()
+	} else if err := cfg.ActivateManagedAttachmentRoot(); err != nil {
+		return err
+	}
 
 	bridge, err := newBridge(cfg)
 	if err != nil {
@@ -106,7 +114,10 @@ func newServer(bridge bridgeclient.Bridge, cfg *config.Config) *mcp.Server {
 		Title:   "Baryon — Proton Mail via Bridge",
 		Version: version,
 	}, nil)
-	mcptools.RegisterAll(server, bridge, mcptools.Options{AttachmentRoots: cfg.AttachmentRoots})
+	mcptools.RegisterAll(server, bridge, mcptools.Options{
+		AttachmentRoots: cfg.AttachmentRoots,
+		Identities:      cfg.SenderIdentities,
+	})
 	if cfg.Unconfigured {
 		server.AddReceivingMiddleware(refuseToolCalls)
 	}

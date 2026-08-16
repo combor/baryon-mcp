@@ -39,13 +39,13 @@ func TestListEmailsClampsPagination(t *testing.T) {
 	session := newTestSession(t, fake)
 
 	callTool(t, session, "list_emails", map[string]any{"folder": "INBOX"})
-	if fake.gotQuery.limit != defaultLimit || fake.gotQuery.offset != 0 {
-		t.Errorf("defaults: got limit=%d offset=%d", fake.gotQuery.limit, fake.gotQuery.offset)
+	if fake.gotQuery.page.Limit != defaultLimit || fake.gotQuery.page.Offset != 0 {
+		t.Errorf("defaults: got limit=%d offset=%d", fake.gotQuery.page.Limit, fake.gotQuery.page.Offset)
 	}
 
 	callTool(t, session, "list_emails", map[string]any{"folder": "INBOX", "limit": 1000, "offset": -3})
-	if fake.gotQuery.limit != maxLimit || fake.gotQuery.offset != 0 {
-		t.Errorf("clamped: got limit=%d offset=%d, want %d and 0", fake.gotQuery.limit, fake.gotQuery.offset, maxLimit)
+	if fake.gotQuery.page.Limit != maxLimit || fake.gotQuery.page.Offset != 0 {
+		t.Errorf("clamped: got limit=%d offset=%d, want %d and 0", fake.gotQuery.page.Limit, fake.gotQuery.page.Offset, maxLimit)
 	}
 }
 
@@ -106,5 +106,56 @@ func TestListEmailsRequiresFolder(t *testing.T) {
 	res := callTool(t, session, "list_emails", map[string]any{"folder": ""})
 	if !res.IsError {
 		t.Fatal("expected error for empty folder")
+	}
+}
+
+func TestListEmailsPassesTheCursorThrough(t *testing.T) {
+	fake := &fakeBridge{page: &bridgeclient.MessagePage{UIDValidity: 42, Total: 9, NextBeforeUID: 30}}
+	session := newTestSession(t, fake)
+
+	out := decodePage(t, callTool(t, session, "list_emails", map[string]any{
+		"folder": "INBOX", "before_uid": 41, "uidvalidity": 42, "limit": 5,
+	}))
+	if fake.gotQuery.page.BeforeUID != 41 || fake.gotQuery.page.UIDValidity != 42 {
+		t.Errorf("cursor reached the bridge as %+v", fake.gotQuery.page)
+	}
+	if out.NextBeforeUID != 30 {
+		t.Errorf("next_before_uid = %d, want 30", out.NextBeforeUID)
+	}
+	if out.ContentTrust != contentTrustUntrusted {
+		t.Errorf("content_trust = %q", out.ContentTrust)
+	}
+}
+
+func TestListingsRejectPartialAndConflictingCursors(t *testing.T) {
+	fake := &fakeBridge{}
+	session := newTestSession(t, fake)
+
+	cases := map[string]map[string]any{
+		"before_uid without uidvalidity": {"folder": "INBOX", "before_uid": 41},
+		"uidvalidity without before_uid": {"folder": "INBOX", "uidvalidity": 42},
+		"cursor mixed with offset":       {"folder": "INBOX", "before_uid": 41, "uidvalidity": 42, "offset": 20},
+	}
+	for _, tool := range []string{"list_emails", "search_emails"} {
+		for name, args := range cases {
+			res := callTool(t, session, tool, args)
+			if !res.IsError {
+				t.Errorf("%s with %s: expected an error result", tool, name)
+			}
+		}
+	}
+	if fake.gotQuery.folder != "" {
+		t.Error("an invalid page request reached the bridge")
+	}
+}
+
+func TestSummariesCarryMessageID(t *testing.T) {
+	fake := &fakeBridge{page: &bridgeclient.MessagePage{UIDValidity: 42, Total: 1, Emails: []bridgeclient.EmailSummary{
+		{UID: 9, Subject: "hi", MessageID: "abc@example.org"},
+	}}}
+	session := newTestSession(t, fake)
+	out := decodePage(t, callTool(t, session, "list_emails", map[string]any{"folder": "INBOX"}))
+	if len(out.Emails) != 1 || out.Emails[0].MessageID != "abc@example.org" {
+		t.Errorf("emails = %+v, want the message_id for correlation", out.Emails)
 	}
 }

@@ -21,7 +21,7 @@ func (Unavailable) ListFolders(context.Context) ([]Folder, error) {
 	return nil, ErrUnconfigured
 }
 
-func (Unavailable) ListMessages(context.Context, string, SearchCriteria, int, int) (*MessagePage, error) {
+func (Unavailable) ListMessages(context.Context, string, SearchCriteria, PageRequest) (*MessagePage, error) {
 	return nil, ErrUnconfigured
 }
 

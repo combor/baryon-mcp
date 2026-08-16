@@ -60,7 +60,7 @@ func seedContentInbox(t *testing.T) *Client {
 
 func liveRef(t *testing.T, c *Client) (uint32, uint32) {
 	t.Helper()
-	page, err := c.ListMessages(context.Background(), "INBOX", SearchCriteria{}, 1, 0)
+	page, err := c.ListMessages(context.Background(), "INBOX", SearchCriteria{}, PageRequest{Limit: 1})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -20,8 +20,10 @@ func writeAttachmentFile(path string, data []byte, roots attachmentRoots) (strin
 	if runtime.GOOS == "windows" {
 		return "", fmt.Errorf("save_attachment is not supported on Windows; use get_attachment to read the attachment inline instead")
 	}
-	if !filepath.IsAbs(path) {
-		return "", fmt.Errorf("output_path %q is not an absolute path", path)
+	requested := path
+	path, ok := roots.resolve(path)
+	if !ok {
+		return "", fmt.Errorf("output_path %q is not an absolute path, and this server has no attachment directory to resolve it against", requested)
 	}
 	if len(path) >= 2 && os.IsPathSeparator(path[0]) && os.IsPathSeparator(path[1]) {
 		return "", fmt.Errorf("output_path %q is a UNC or device path, which is not supported", path)

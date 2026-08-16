@@ -13,11 +13,11 @@ type draftAttachmentInput struct {
 	Filename      string  `json:"filename,omitempty" jsonschema:"attachment filename; required with content_base64, defaults to the content_path basename"`
 	ContentType   string  `json:"content_type,omitempty" jsonschema:"MIME content type, for example application/pdf; required with content_base64, inferred from the filename extension with content_path"`
 	ContentBase64 *string `json:"content_base64,omitempty" jsonschema:"standard base64-encoded attachment bytes; up to 25 MB decoded"`
-	ContentPath   *string `json:"content_path,omitempty" jsonschema:"absolute path to a regular file on the server's machine, read when the draft is saved; each attachment takes exactly one of content_base64 or content_path; not available on Windows"`
+	ContentPath   *string `json:"content_path,omitempty" jsonschema:"path to a regular file on the server's machine, read when the draft is saved: relative to the server's attachment directory, or absolute and inside it. Each attachment takes exactly one of content_base64 or content_path; not available on Windows"`
 }
 
 type saveDraftInput struct {
-	From        string                 `json:"from" jsonschema:"sender address; must be one of the Proton account addresses exposed by Bridge"`
+	From        string                 `json:"from" jsonschema:"sender address; must be one of the Proton account addresses exposed by Bridge, which list_sender_identities reports"`
 	To          []string               `json:"to,omitempty" jsonschema:"To recipient addresses"`
 	Cc          []string               `json:"cc,omitempty" jsonschema:"Cc recipient addresses"`
 	Bcc         []string               `json:"bcc,omitempty" jsonschema:"Bcc recipient addresses retained in the saved draft"`
@@ -40,11 +40,13 @@ type saveDraftOutput struct {
 	Warning              string `json:"warning,omitempty"`
 }
 
-func saveDraftAnnotations() *mcp.ToolAnnotations {
-	destructive := true
+// draftAnnotations describes a mailbox write. destructive marks a tool that can
+// remove something: save_draft can, since replacing a draft expunges the
+// previous version, while one that only appends is additive.
+func draftAnnotations(title string, destructive bool) *mcp.ToolAnnotations {
 	closedWorld := false
 	return &mcp.ToolAnnotations{
-		Title:           "Save draft",
+		Title:           title,
 		ReadOnlyHint:    false,
 		DestructiveHint: &destructive,
 		IdempotentHint:  false,
@@ -52,13 +54,42 @@ func saveDraftAnnotations() *mcp.ToolAnnotations {
 	}
 }
 
+// draftAttachments loads every attachment, from inline base64 or a confined
+// local path, before anything touches the mailbox: an unreadable file fails the
+// call rather than leaving a half-built draft.
+func draftAttachments(in []draftAttachmentInput, roots attachmentRoots) ([]bridgeclient.DraftAttachment, error) {
+	// Bound conversion work before the bridge validates the decoded Draft.
+	if len(in) > bridgeclient.MaxDraftAttachments {
+		return nil, fmt.Errorf("a draft may contain at most %d attachments", bridgeclient.MaxDraftAttachments)
+	}
+	var loaded []bridgeclient.DraftAttachment
+	total := 0
+	for i, attachment := range in {
+		if (attachment.ContentBase64 == nil) == (attachment.ContentPath == nil) {
+			return nil, fmt.Errorf("attachment %d must set exactly one of content_base64 or content_path", i)
+		}
+		var one bridgeclient.DraftAttachment
+		var err error
+		if attachment.ContentPath != nil {
+			one, err = readAttachmentFile(i, attachment, roots)
+		} else {
+			one, err = decodeAttachment(i, attachment)
+		}
+		if err != nil {
+			return nil, err
+		}
+		total += len(one.Data)
+		if total > bridgeclient.MaxDraftAttachmentTotalBytes {
+			return nil, fmt.Errorf("attachments total %d bytes, above the %d byte limit", total, bridgeclient.MaxDraftAttachmentTotalBytes)
+		}
+		loaded = append(loaded, one)
+	}
+	return loaded, nil
+}
+
 func toDraft(in saveDraftInput, roots attachmentRoots) (bridgeclient.Draft, error) {
 	if (in.UID == 0) != (in.UIDValidity == 0) {
 		return bridgeclient.Draft{}, fmt.Errorf("uid and uidvalidity must be supplied together when replacing a draft")
-	}
-	// Bound conversion work before the bridge validates the decoded Draft.
-	if len(in.Attachments) > bridgeclient.MaxDraftAttachments {
-		return bridgeclient.Draft{}, fmt.Errorf("a draft may contain at most %d attachments", bridgeclient.MaxDraftAttachments)
 	}
 
 	draft := bridgeclient.Draft{
@@ -75,35 +106,19 @@ func toDraft(in saveDraftInput, roots attachmentRoots) (bridgeclient.Draft, erro
 	if in.UID != 0 {
 		draft.Replace = &bridgeclient.DraftRef{UID: in.UID, UIDValidity: in.UIDValidity}
 	}
-	totalAttachmentBytes := 0
-	for i, attachment := range in.Attachments {
-		if (attachment.ContentBase64 == nil) == (attachment.ContentPath == nil) {
-			return bridgeclient.Draft{}, fmt.Errorf("attachment %d must set exactly one of content_base64 or content_path", i)
-		}
-		var loaded bridgeclient.DraftAttachment
-		var err error
-		if attachment.ContentPath != nil {
-			loaded, err = readAttachmentFile(i, attachment, roots)
-		} else {
-			loaded, err = decodeAttachment(i, attachment)
-		}
-		if err != nil {
-			return bridgeclient.Draft{}, err
-		}
-		totalAttachmentBytes += len(loaded.Data)
-		if totalAttachmentBytes > bridgeclient.MaxDraftAttachmentTotalBytes {
-			return bridgeclient.Draft{}, fmt.Errorf("attachments total %d bytes, above the %d byte limit", totalAttachmentBytes, bridgeclient.MaxDraftAttachmentTotalBytes)
-		}
-		draft.Attachments = append(draft.Attachments, loaded)
+	attachments, err := draftAttachments(in.Attachments, roots)
+	if err != nil {
+		return bridgeclient.Draft{}, err
 	}
+	draft.Attachments = attachments
 	return draft, nil
 }
 
 func registerSaveDraft(server *mcp.Server, bridge bridgeclient.Bridge, roots attachmentRoots) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "save_draft",
-		Description: "Create a complete Proton Mail draft, or replace an existing draft when uid and uidvalidity are provided. Supports plain text, an optional HTML alternative, and bounded attachments supplied either inline as base64 (content_base64) or as an absolute path to a local file that the server reads at save time (content_path). To reply inside a thread, read the message with get_email and set in_reply_to to its message_id, and references to its references followed by its message_id; when it reports no references, use its in_reply_to in their place so earlier ancestry survives. A replacement keeps the previous draft's Message-ID, plus whichever of its In-Reply-To and References the call omits; passing an empty array for either removes it, detaching the draft from its thread. Updating appends the replacement before removing the old UID; inspect warning if cleanup was incomplete.",
-		Annotations: saveDraftAnnotations(),
+		Description: "Create a complete Proton Mail draft, or replace an existing draft when uid and uidvalidity are provided. Supports plain text, an optional HTML alternative, and bounded attachments supplied either inline as base64 (content_base64) or as a path inside the server's attachment directory that it reads at save time (content_path). To answer one message, save_reply_draft derives its recipients and threading for you. To reply inside a thread here, read the message with get_email and set in_reply_to to its message_id, and references to its references followed by its message_id; when it reports no references, use its in_reply_to in their place so earlier ancestry survives. A replacement keeps the previous draft's Message-ID, plus whichever of its In-Reply-To and References the call omits; passing an empty array for either removes it, detaching the draft from its thread. Updating appends the replacement before removing the old UID; inspect warning if cleanup was incomplete.",
+		Annotations: draftAnnotations("Save draft", true),
 	}, func(ctx context.Context, req *mcp.CallToolRequest, in saveDraftInput) (*mcp.CallToolResult, saveDraftOutput, error) {
 		draft, err := toDraft(in, roots)
 		if err != nil {

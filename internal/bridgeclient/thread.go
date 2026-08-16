@@ -75,6 +75,11 @@ type Thread struct {
 // that far, so generations below the first are absent.
 func (c *Client) GetThread(ctx context.Context, ref ThreadRef) (*Thread, error) {
 	searchFolder := ref.searchFolder()
+	// The conversation is gathered from a second mailbox, which the start
+	// folder's check does not cover.
+	if err := c.policy.check(searchFolder); err != nil {
+		return nil, err
+	}
 	var thread *Thread
 	err := c.withMessage(ctx, ref.Folder, ref.UIDValidity, func(cli *imapclient.Client) error {
 		root, err := threadRoot(cli, ref.UID)

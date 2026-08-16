@@ -4,10 +4,15 @@
 package config
 
 import (
+	"encoding/csv"
+	"errors"
 	"fmt"
+	"io"
 	"net"
+	"net/mail"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 )
@@ -23,6 +28,13 @@ const (
 	// SSL connection mode.
 	SecurityTLS Security = "tls"
 )
+
+// Identity is one address the server may put in a draft's From header. The
+// first entry of Config.SenderIdentities is the default.
+type Identity struct {
+	Address string
+	Name    string
+}
 
 // Config holds everything needed to reach Proton Bridge's IMAP endpoint.
 type Config struct {
@@ -43,6 +55,17 @@ type Config struct {
 	// AttachmentRoots limits save_draft content_path reads to these
 	// symlink-resolved directories; empty means any readable file.
 	AttachmentRoots []string
+	// ManagedAttachmentRoot is the fallback directory when
+	// BARYON_ATTACHMENT_ROOTS is unset; ActivateManagedAttachmentRoot turns it
+	// into a boundary. Empty with explicit roots, or where the attachment tools
+	// refuse local paths outright.
+	ManagedAttachmentRoot string
+	// SenderIdentities are the addresses a draft may be sent from, most
+	// preferred first; empty when none could be determined.
+	SenderIdentities []Identity
+	// AllowedFolders restricts every read tool to these mailboxes; empty means
+	// all of them.
+	AllowedFolders []string
 	// Unconfigured reports that Username and Password are absent and the
 	// caller opted into serving MCP introspection without them. Bridge
 	// operations are unusable; everything else was still validated.
@@ -139,6 +162,18 @@ func Load(rawGetenv func(string) string) (*Config, error) {
 		}
 	}
 
+	identities, err := senderIdentities(getenv("BARYON_SENDER_IDENTITIES"), cfg.Username)
+	if err != nil {
+		return nil, err
+	}
+	cfg.SenderIdentities = identities
+
+	folders, err := allowedFolders(getenv("BARYON_ALLOWED_FOLDERS"))
+	if err != nil {
+		return nil, err
+	}
+	cfg.AllowedFolders = folders
+
 	if v := getenv("BARYON_ATTACHMENT_ROOTS"); v != "" {
 		for _, root := range filepath.SplitList(v) {
 			if root == "" {
@@ -164,9 +199,139 @@ func Load(rawGetenv func(string) string) (*Config, error) {
 		if len(cfg.AttachmentRoots) == 0 {
 			return nil, fmt.Errorf("BARYON_ATTACHMENT_ROOTS %q contains no directory entries", v)
 		}
+	} else {
+		managed, err := managedAttachmentRoot(getenv)
+		if err != nil {
+			return nil, err
+		}
+		cfg.ManagedAttachmentRoot = managed
 	}
 
 	return cfg, nil
+}
+
+// managedAttachmentRoot is where local attachment access is confined when the
+// operator configured no roots. It only computes the path: `baryon-mcp setup`
+// runs Load too, so Load must have no filesystem side effects. Windows has
+// none, because both file-touching tools refuse to run there.
+func managedAttachmentRoot(getenv func(string) string) (string, error) {
+	if runtime.GOOS == "windows" {
+		return "", nil
+	}
+	if v := getenv("XDG_CONFIG_HOME"); v != "" {
+		// A relative XDG_CONFIG_HOME would resolve against the working directory,
+		// which differs between setup and a client-launched server.
+		dir, err := filepath.Abs(filepath.Join(v, "baryon-mcp", "attachments"))
+		if err != nil {
+			return "", fmt.Errorf("resolving the managed attachment directory: %w", err)
+		}
+		return dir, nil
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("resolving the attachment directory: %w (set HOME, XDG_CONFIG_HOME, or BARYON_ATTACHMENT_ROOTS)", err)
+	}
+	return filepath.Join(home, ".config", "baryon-mcp", "attachments"), nil
+}
+
+// ConfineUnusedAttachmentRoot names the managed directory as the boundary
+// without creating it, for a server that refuses every tool call anyway. The
+// directory is absent, so every path is refused — closed rather than open, and
+// with no write for a read-only container to fail on.
+func (c *Config) ConfineUnusedAttachmentRoot() {
+	if c.ManagedAttachmentRoot == "" {
+		return
+	}
+	c.AttachmentRoots = append(c.AttachmentRoots, c.ManagedAttachmentRoot)
+}
+
+// ActivateManagedAttachmentRoot creates the managed directory at mode 0700 and
+// makes it the active boundary, before the tools pin their roots. Failing here
+// beats serving with file access confined to nothing.
+func (c *Config) ActivateManagedAttachmentRoot() error {
+	if c.ManagedAttachmentRoot == "" {
+		return nil
+	}
+	if err := os.MkdirAll(c.ManagedAttachmentRoot, 0o700); err != nil {
+		return fmt.Errorf("creating the attachment directory %s: %w (set BARYON_ATTACHMENT_ROOTS to a directory this process may write to instead)", c.ManagedAttachmentRoot, err)
+	}
+	// MkdirAll leaves an existing directory's mode alone, and umask can loosen
+	// a fresh one.
+	if err := os.Chmod(c.ManagedAttachmentRoot, 0o700); err != nil {
+		return fmt.Errorf("securing the attachment directory %s: %w", c.ManagedAttachmentRoot, err)
+	}
+	resolved, err := filepath.EvalSymlinks(c.ManagedAttachmentRoot)
+	if err != nil {
+		return fmt.Errorf("resolving the attachment directory %s: %w", c.ManagedAttachmentRoot, err)
+	}
+	c.AttachmentRoots = append(c.AttachmentRoots, resolved)
+	return nil
+}
+
+// senderIdentities parses BARYON_SENDER_IDENTITIES as an RFC 5322 address
+// list, in order, so the first entry is the default. Unset, the Bridge
+// username stands in when it is itself an address.
+func senderIdentities(raw, username string) ([]Identity, error) {
+	if raw == "" {
+		address, err := mail.ParseAddress(username)
+		if err != nil {
+			return nil, nil
+		}
+		return []Identity{{Address: address.Address, Name: address.Name}}, nil
+	}
+	parsed, err := mail.ParseAddressList(raw)
+	if err != nil {
+		return nil, fmt.Errorf("BARYON_SENDER_IDENTITIES %q is not a comma-separated list of RFC 5322 addresses: %w", raw, err)
+	}
+	identities := make([]Identity, 0, len(parsed))
+	seen := make(map[string]bool, len(parsed))
+	for _, address := range parsed {
+		key := strings.ToLower(address.Address)
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		identities = append(identities, Identity{Address: address.Address, Name: address.Name})
+	}
+	if len(identities) == 0 {
+		return nil, fmt.Errorf("BARYON_SENDER_IDENTITIES %q lists no addresses", raw)
+	}
+	return identities, nil
+}
+
+// allowedFolders parses BARYON_ALLOWED_FOLDERS as one RFC 4180 CSV row, so a
+// mailbox whose name contains a comma can be quoted rather than split.
+func allowedFolders(raw string) ([]string, error) {
+	if raw == "" {
+		return nil, nil
+	}
+	reader := csv.NewReader(strings.NewReader(raw))
+	reader.FieldsPerRecord = -1
+	reader.TrimLeadingSpace = true
+	record, err := reader.Read()
+	if err != nil {
+		return nil, fmt.Errorf("BARYON_ALLOWED_FOLDERS %q is not a single CSV row of folder names: %w", raw, err)
+	}
+	// Anything after the first row — an unquoted newline, or CSV that does not
+	// parse — fails rather than truncating the policy to whatever parsed.
+	if _, err := reader.Read(); !errors.Is(err, io.EOF) {
+		return nil, fmt.Errorf("BARYON_ALLOWED_FOLDERS %q must be a single CSV row of folder names", raw)
+	}
+	folders := make([]string, 0, len(record))
+	seen := make(map[string]bool, len(record))
+	for _, name := range record {
+		name = strings.TrimSpace(name)
+		if name == "" || seen[name] {
+			continue
+		}
+		seen[name] = true
+		folders = append(folders, name)
+	}
+	// Fail closed: a set but entry-less restriction must not mean unrestricted.
+	if len(folders) == 0 {
+		return nil, fmt.Errorf("BARYON_ALLOWED_FOLDERS %q contains no folder names", raw)
+	}
+	return folders, nil
 }
 
 // introspectionOnly reports whether the server may start with no Bridge

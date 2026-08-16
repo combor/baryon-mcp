@@ -29,27 +29,29 @@ func clampOffset(o int) int {
 }
 
 type emailSummary struct {
-	UID      uint32   `json:"uid" jsonschema:"message UID within the folder"`
-	Subject  string   `json:"subject"`
-	From     []string `json:"from,omitempty"`
-	To       []string `json:"to,omitempty"`
-	Date     string   `json:"date,omitempty" jsonschema:"send date, RFC 3339"`
-	Seen     bool     `json:"seen"`
-	Flagged  bool     `json:"flagged,omitempty"`
-	Answered bool     `json:"answered,omitempty"`
+	UID       uint32   `json:"uid" jsonschema:"message UID within the folder"`
+	Subject   string   `json:"subject"`
+	From      []string `json:"from,omitempty"`
+	To        []string `json:"to,omitempty"`
+	Date      string   `json:"date,omitempty" jsonschema:"send date, RFC 3339"`
+	MessageID string   `json:"message_id,omitempty" jsonschema:"RFC 5322 Message-ID without angle brackets, for correlating this message across folders"`
+	Seen      bool     `json:"seen"`
+	Flagged   bool     `json:"flagged,omitempty"`
+	Answered  bool     `json:"answered,omitempty"`
 }
 
 func toEmailSummaries(in []bridgeclient.EmailSummary) []emailSummary {
 	out := make([]emailSummary, 0, len(in))
 	for _, e := range in {
 		s := emailSummary{
-			UID:      e.UID,
-			Subject:  e.Subject,
-			From:     e.From,
-			To:       e.To,
-			Seen:     e.Seen,
-			Flagged:  e.Flagged,
-			Answered: e.Answered,
+			UID:       e.UID,
+			Subject:   e.Subject,
+			From:      e.From,
+			To:        e.To,
+			MessageID: e.MessageID,
+			Seen:      e.Seen,
+			Flagged:   e.Flagged,
+			Answered:  e.Answered,
 		}
 		if !e.Date.IsZero() {
 			s.Date = e.Date.Format(time.RFC3339)
