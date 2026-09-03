@@ -1,9 +1,9 @@
 # syntax=docker/dockerfile:1
 
-# golang:1.26.5-bookworm — keep in step with the toolchain in go.mod.
+# golang:1.27.1-bookworm — keep in step with the toolchain in go.mod.
 # Compilation runs on the build machine's own platform and cross-compiles with
 # GOARCH, so building the arm64 image needs no emulation.
-FROM --platform=$BUILDPLATFORM golang@sha256:6c5605ab3a9a9fb3c4eafe5b3d63cdbf3881caf113262b67862547b54a9db599 AS build
+FROM --platform=$BUILDPLATFORM golang@sha256:648f440f42a0958804efb24df176f806f9d353b41f1c0627f666428e40310f6b AS build
 
 WORKDIR /src
 
@@ -22,7 +22,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     go build -trimpath -ldflags "-s -w -X main.version=$VERSION" -o /baryon-mcp ./cmd/baryon-mcp
 
 # gcr.io/distroless/static-debian13:nonroot — no shell, no package manager.
-FROM gcr.io/distroless/static-debian13@sha256:f7f8f729987ad0fdf6b05eeeae94b26e6a0f613bdf46feea7fc40f7bd72953e6
+FROM gcr.io/distroless/static-debian13@sha256:1c2c046bc09ed40fad370b599a0b1ae7987f55b01e247cf27a7c27cd97e5bbc7
 
 LABEL org.opencontainers.image.title="baryon-mcp" \
       org.opencontainers.image.description="Read Proton Mail and save drafts through your local Proton Mail Bridge." \
