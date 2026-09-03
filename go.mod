@@ -1,12 +1,12 @@
 module github.com/combor/baryon-mcp
 
-go 1.26.5
+go 1.27.1
 
 require (
 	github.com/emersion/go-imap/v2 v2.0.0-beta.8
 	github.com/emersion/go-message v0.18.2
 	github.com/modelcontextprotocol/go-sdk v1.7.0
-	github.com/urfave/cli/v3 v3.10.1
+	github.com/urfave/cli/v3 v3.11.0
 	github.com/zalando/go-keyring v0.2.8
 	golang.org/x/term v0.45.0
 )
@@ -22,6 +22,6 @@ require (
 	golang.org/x/oauth2 v0.36.0 // indirect
 	golang.org/x/sync v0.22.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect
-	golang.org/x/text v0.40.0 // indirect
+	golang.org/x/text v0.41.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
 )

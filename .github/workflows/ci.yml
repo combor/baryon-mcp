@@ -60,7 +60,7 @@ jobs:
         with:
           go-version-file: 'go.mod'
           cache: true
-      - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+      - uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
       - name: Build image
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
@@ -111,7 +111,7 @@ jobs:
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
         with:
-          version: v2.17.1
+          version: v2.18.0
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -168,7 +168,7 @@ jobs:
           # mismatch warning. This is the release tag of the newest stable
           # winget, pinned so neither a new image nor a new release can change
           # what validates the manifests.
-          WINGET_VERSION: v1.29.280
+          WINGET_VERSION: v1.29.290
         run: |
           Install-Module -Name Microsoft.WinGet.Client -Repository PSGallery -Scope CurrentUser -Force
           Import-Module Microsoft.WinGet.Client
@@ -402,7 +402,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # The arm64 image is cross-compiled by Go and its runtime stage only
       # copies that binary in, so no emulation is involved.
-      - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+      - uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
       - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           registry: ghcr.io
