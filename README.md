@@ -394,7 +394,7 @@ Attachment roots are pinned by identity when the server starts. Replacing a root
 
 ## Development
 
-Building from source requires Go 1.26.5 or later.
+Building from source requires Go 1.27.1 or later.
 
 ```sh
 make build      # build ./baryon-mcp
@@ -403,6 +403,8 @@ make snapshot   # local GoReleaser build and MCPB packaging into dist/
 ```
 
 `make snapshot` also requires GoReleaser, `jq`, and `npx`.
+
+The release workflow fills the `server.json` template with checksums from the released MCPB bundles before publishing it to the MCP Registry.
 
 ## License
 

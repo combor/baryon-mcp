@@ -3,7 +3,7 @@
   "name": "io.github.combor/baryon-mcp",
   "title": "Baryon — Proton Mail via Bridge",
   "description": "Read Proton Mail and save drafts through your local Proton Mail Bridge.",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "websiteUrl": "https://github.com/combor/baryon-mcp",
   "repository": {
     "url": "https://github.com/combor/baryon-mcp",
@@ -13,45 +13,40 @@
   "packages": [
     {
       "registryType": "mcpb",
-      "identifier": "https://github.com/combor/baryon-mcp/releases/download/v0.5.0/baryon-mcp-darwin-amd64.mcpb",
-      "version": "0.5.0",
-      "fileSha256": "4a6c6844d1ac01292f2133722562ff35df68980bbde8a4c46ef9c073e7a89ef5",
+      "identifier": "https://github.com/combor/baryon-mcp/releases/download/v0.5.1/baryon-mcp-darwin-amd64.mcpb",
+      "version": "0.5.1",
       "transport": {
         "type": "stdio"
       }
     },
     {
       "registryType": "mcpb",
-      "identifier": "https://github.com/combor/baryon-mcp/releases/download/v0.5.0/baryon-mcp-darwin-arm64.mcpb",
-      "version": "0.5.0",
-      "fileSha256": "5205367490bf09b3de623a09630531d9ad71a1be2003183e382975f2ee99e952",
+      "identifier": "https://github.com/combor/baryon-mcp/releases/download/v0.5.1/baryon-mcp-darwin-arm64.mcpb",
+      "version": "0.5.1",
       "transport": {
         "type": "stdio"
       }
     },
     {
       "registryType": "mcpb",
-      "identifier": "https://github.com/combor/baryon-mcp/releases/download/v0.5.0/baryon-mcp-linux-amd64.mcpb",
-      "version": "0.5.0",
-      "fileSha256": "fb999998e5d407a3b2c4e0746c6d07a388b9385dc01730274af7b6775318179c",
+      "identifier": "https://github.com/combor/baryon-mcp/releases/download/v0.5.1/baryon-mcp-linux-amd64.mcpb",
+      "version": "0.5.1",
       "transport": {
         "type": "stdio"
       }
     },
     {
       "registryType": "mcpb",
-      "identifier": "https://github.com/combor/baryon-mcp/releases/download/v0.5.0/baryon-mcp-linux-arm64.mcpb",
-      "version": "0.5.0",
-      "fileSha256": "1d9caf7d27d6aec0bf74b8f33f6706c4fe01ea80c36ffc5e23ab4d968b9cf9c2",
+      "identifier": "https://github.com/combor/baryon-mcp/releases/download/v0.5.1/baryon-mcp-linux-arm64.mcpb",
+      "version": "0.5.1",
       "transport": {
         "type": "stdio"
       }
     },
     {
       "registryType": "mcpb",
-      "identifier": "https://github.com/combor/baryon-mcp/releases/download/v0.5.0/baryon-mcp-windows-amd64.mcpb",
-      "version": "0.5.0",
-      "fileSha256": "029e5b90c04b1697abb911b3858447a39328a30610fd64df160ef324e171e095",
+      "identifier": "https://github.com/combor/baryon-mcp/releases/download/v0.5.1/baryon-mcp-windows-amd64.mcpb",
+      "version": "0.5.1",
       "transport": {
         "type": "stdio"
       }

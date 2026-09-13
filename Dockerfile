@@ -1,9 +1,9 @@
 # syntax=docker/dockerfile:1
 
-# golang:1.27.1-bookworm — keep in step with the toolchain in go.mod.
+# golang:1.27.1-trixie, keep in step with the toolchain in go.mod.
 # Compilation runs on the build machine's own platform and cross-compiles with
 # GOARCH, so building the arm64 image needs no emulation.
-FROM --platform=$BUILDPLATFORM golang@sha256:648f440f42a0958804efb24df176f806f9d353b41f1c0627f666428e40310f6b AS build
+FROM --platform=$BUILDPLATFORM golang@sha256:9baa6b4187bbb98d240372a8a235ac0bb6b5ddd52bba1431dc2f7c0705862728 AS build
 
 WORKDIR /src
 
