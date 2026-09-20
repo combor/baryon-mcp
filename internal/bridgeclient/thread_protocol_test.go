@@ -89,8 +89,8 @@ func TestProtocolGetThreadAssemblesConversation(t *testing.T) {
 		}
 	}
 	for _, m := range thread.Messages {
-		if m.Body != "" {
-			t.Errorf("body returned without include_bodies: %q", m.Body)
+		if m.Summary.Body != "" {
+			t.Errorf("body returned without include_bodies: %q", m.Summary.Body)
 		}
 		if m.MessageID == "other@test" {
 			t.Error("unrelated message pulled into the conversation")
@@ -182,14 +182,14 @@ func TestProtocolGetThreadIncludesBodies(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, m := range thread.Messages {
-		if m.Body == "" {
+		if m.Summary.Body == "" {
 			t.Errorf("message %q returned no body", m.MessageID)
 		}
-		if m.BodyIsHTML {
+		if m.Summary.BodyFromHTML {
 			t.Errorf("message %q reported HTML for a plain text part", m.MessageID)
 		}
 	}
-	if got := thread.Messages[0].Body; got != "body of root@test\r\n" && got != "body of root@test\n" {
+	if got := thread.Messages[0].Summary.Body; got != "body of root@test\r\n" && got != "body of root@test\n" {
 		t.Errorf("body = %q", got)
 	}
 }

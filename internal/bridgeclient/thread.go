@@ -12,17 +12,8 @@ import (
 	"github.com/combor/baryon-mcp/internal/mailparse"
 )
 
-const (
-	// MaxThreadMessages bounds one assembled conversation.
-	MaxThreadMessages = 50
-	// threadBodyCharCap bounds each body in a thread. It sits far below
-	// bodyCharCap because a thread multiplies it by the message count: a whole
-	// conversation should cost about what a single get_email does.
-	threadBodyCharCap = 2_000
-	// threadTextPartCap covers the worst-case encoding of threadBodyCharCap
-	// characters, in the same spirit as textPartCap.
-	threadTextPartCap = 64 * 1024
-)
+// MaxThreadMessages bounds one assembled conversation.
+const MaxThreadMessages = 50
 
 // ThreadRef selects the conversation to assemble. Folder, UID and UIDValidity
 // identify the message to start from; SearchFolder names the folder the
@@ -42,15 +33,11 @@ func (r ThreadRef) searchFolder() string {
 	return r.Folder
 }
 
-// ThreadMessage is one message in a conversation. Body is populated only when
-// the request asked for it, and holds the plain text part when there is one,
-// the HTML part otherwise.
+// ThreadMessage is one message in a conversation. The summary carries a body
+// only when the request asked for one.
 type ThreadMessage struct {
-	Summary       EmailSummary
-	MessageID     string
-	Body          string
-	BodyIsHTML    bool
-	BodyTruncated bool
+	Summary   EmailSummary
+	MessageID string
 }
 
 // Thread is one assembled conversation, oldest first. UID values belong to
@@ -110,7 +97,7 @@ func (c *Client) GetThread(ctx context.Context, ref ThreadRef) (*Thread, error) 
 		for _, m := range members {
 			msg := ThreadMessage{Summary: m.summary, MessageID: m.messageID}
 			if ref.IncludeBodies {
-				if err := fillThreadBody(cli, &msg, m.outline); err != nil {
+				if err := fillBodyPreview(cli, &msg.Summary, m.outline); err != nil {
 					return err
 				}
 			}
@@ -242,44 +229,4 @@ func mentions(headers threadHeaders, root string) bool {
 		headers.root == root ||
 		slices.Contains(headers.references, root) ||
 		slices.Contains(headers.inReplyTo, root)
-}
-
-// fillThreadBody fetches one capped body part, preferring plain text. Each
-// message needs its own fetch because the part path comes from its own
-// structure.
-func fillThreadBody(cli *imapclient.Client, msg *ThreadMessage, outline mailparse.Outline) error {
-	part, isHTML := outline.Plain, false
-	if part == nil {
-		part, isHTML = outline.HTML, true
-	}
-	if part == nil {
-		return nil
-	}
-
-	section := &imap.FetchItemBodySection{
-		Part:    part.Path,
-		Peek:    true,
-		Partial: &imap.SectionPartial{Offset: 0, Size: threadTextPartCap},
-	}
-	uid := imap.UID(msg.Summary.UID)
-	msgs, err := cli.Fetch(imap.UIDSetNum(uid), &imap.FetchOptions{
-		UID:         true,
-		BodySection: []*imap.FetchItemBodySection{section},
-	}).Collect()
-	if err != nil {
-		return fmt.Errorf("fetching body of uid %d: %w", msg.Summary.UID, err)
-	}
-	if len(msgs) == 0 {
-		// Expunged between search and fetch; the summary still stands.
-		return nil
-	}
-	raw, ok := findSection(msgs[0], part.Path)
-	if !ok {
-		return nil
-	}
-	res := mailparse.DecodeText(raw, part.Encoding, part.Charset, part.EncodedSize > threadTextPartCap, threadBodyCharCap)
-	msg.Body = res.Text
-	msg.BodyIsHTML = isHTML
-	msg.BodyTruncated = res.Truncated
-	return nil
 }

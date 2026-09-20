@@ -24,7 +24,7 @@ type threadMessageOutput struct {
 	Seen          bool     `json:"seen"`
 	MessageID     string   `json:"message_id,omitempty" jsonschema:"RFC 5322 Message-ID without angle brackets"`
 	Body          string   `json:"body,omitempty" jsonschema:"present only when include_bodies was set"`
-	BodyIsHTML    bool     `json:"body_is_html,omitempty" jsonschema:"the body is HTML because the message carries no plain text part"`
+	BodyFromHTML  bool     `json:"body_from_html,omitempty" jsonschema:"the text was taken from the message's HTML part, with markup stripped, because it carries no plain text part"`
 	BodyTruncated bool     `json:"body_truncated,omitempty" jsonschema:"body was cut short; use get_email for the whole message"`
 }
 
@@ -47,9 +47,9 @@ func toThreadMessages(in []bridgeclient.ThreadMessage) []threadMessageOutput {
 			To:            m.Summary.To,
 			Seen:          m.Summary.Seen,
 			MessageID:     m.MessageID,
-			Body:          m.Body,
-			BodyIsHTML:    m.BodyIsHTML,
-			BodyTruncated: m.BodyTruncated,
+			Body:          m.Summary.Body,
+			BodyFromHTML:  m.Summary.BodyFromHTML,
+			BodyTruncated: m.Summary.BodyTruncated,
 		}
 		if !m.Summary.Date.IsZero() {
 			msg.Date = m.Summary.Date.Format(time.RFC3339)
@@ -87,12 +87,6 @@ func registerGetThread(server *mcp.Server, bridge bridgeclient.Bridge) {
 			ContentTrust: contentTrustUntrusted,
 			Messages:     messages,
 		}
-		// Older peers read only content blocks; leaving Content nil has the SDK
-		// serialize the structured output into one for them.
-		if legacyContent(req) {
-			return nil, out, nil
-		}
-		// Empty non-nil Content stops the SDK echoing the JSON into a redundant text block.
-		return &mcp.CallToolResult{Content: []mcp.Content{}}, out, nil
+		return structuredResult(req), out, nil
 	})
 }

@@ -10,6 +10,8 @@ import (
 
 	"github.com/emersion/go-imap/v2"
 	"github.com/emersion/go-imap/v2/imapclient"
+
+	"github.com/combor/baryon-mcp/internal/mailparse"
 )
 
 // SearchCriteria narrows a message listing. The zero value matches everything.
@@ -24,31 +26,38 @@ type SearchCriteria struct {
 }
 
 // EmailSummary is one message's envelope-level view. MessageID is bare, with
-// no angle brackets.
+// no angle brackets. Body is populated only when the request asked for it, and
+// holds the plain text part when there is one, the HTML part reduced to text
+// otherwise.
 type EmailSummary struct {
-	UID       uint32
-	Subject   string
-	From      []string
-	Sender    []string
-	ReplyTo   []string
-	To        []string
-	Cc        []string
-	Bcc       []string
-	Date      time.Time
-	MessageID string
-	Seen      bool
-	Flagged   bool
-	Answered  bool
+	UID           uint32
+	Subject       string
+	From          []string
+	Sender        []string
+	ReplyTo       []string
+	To            []string
+	Cc            []string
+	Bcc           []string
+	Date          time.Time
+	MessageID     string
+	Seen          bool
+	Flagged       bool
+	Answered      bool
+	Body          string
+	BodyFromHTML  bool
+	BodyTruncated bool
 }
 
 // PageRequest selects one page of a folder listing. Offset shifts when mail
 // arrives between calls; BeforeUID is the stable cursor, returning only
-// messages below a UID already seen, and UIDValidity guards it.
+// messages below a UID already seen, and UIDValidity guards it. IncludeBodies
+// adds a shortened body to every summary on the page.
 type PageRequest struct {
-	Limit       int
-	Offset      int
-	BeforeUID   uint32
-	UIDValidity uint32
+	Limit         int
+	Offset        int
+	BeforeUID     uint32
+	UIDValidity   uint32
+	IncludeBodies bool
 }
 
 // MessagePage is one page of a folder listing, newest first. NextBeforeUID is
@@ -100,11 +109,17 @@ func (c *Client) ListMessages(ctx context.Context, folder string, criteria Searc
 		}
 		uids = uids[req.Offset:end]
 
-		msgs, err := cli.Fetch(imap.UIDSetNum(uids...), &imap.FetchOptions{
+		opts := &imap.FetchOptions{
 			Envelope: true,
 			Flags:    true,
 			UID:      true,
-		}).Collect()
+		}
+		// Body structures cost transfer and parsing on every message, so they
+		// are fetched only when the bodies they locate are wanted.
+		if req.IncludeBodies {
+			opts.BodyStructure = &imap.FetchItemBodyStructure{Extended: true}
+		}
+		msgs, err := cli.Fetch(imap.UIDSetNum(uids...), opts).Collect()
 		if err != nil {
 			return fmt.Errorf("fetching message summaries: %w", err)
 		}
@@ -119,7 +134,13 @@ func (c *Client) ListMessages(ctx context.Context, folder string, criteria Searc
 			if !ok {
 				continue // expunged between search and fetch
 			}
-			page.Emails = append(page.Emails, summarize(m))
+			summary := summarize(m)
+			if req.IncludeBodies && m.BodyStructure != nil {
+				if err := fillBodyPreview(cli, &summary, mailparse.Walk(m.BodyStructure)); err != nil {
+					return err
+				}
+			}
+			page.Emails = append(page.Emails, summary)
 		}
 		return nil
 	})

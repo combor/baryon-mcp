@@ -247,8 +247,8 @@ Baryon speaks stdio, so the client launches the container rather than connecting
 | Tool | Description |
 |---|---|
 | `list_folders` | List the mailbox folders this server may read |
-| `list_emails` | List messages in a folder, newest first, with cursor pagination |
-| `search_emails` | Search by text, sender, recipient, subject, date, or unread state |
+| `list_emails` | List messages in a folder, newest first, with cursor pagination, optionally with shortened bodies |
+| `search_emails` | Search by text, sender, recipient, subject, date, or unread state, optionally with shortened bodies |
 | `get_email` | Read metadata, Sender/Reply-To/Bcc addresses, plain-text/HTML bodies, and attachment metadata |
 | `get_thread` | Read a whole conversation from one of its messages, oldest first, optionally with shortened bodies |
 | `list_attachments` | List attachment metadata without downloading content |
@@ -319,6 +319,8 @@ For reading mail:
 
 Every summary carries the message's `message_id`, which correlates the same message across folders — the copy in `All Mail` and the copy in `INBOX` share it, while their UIDs do not.
 
+`list_emails` and `search_emails` accept `include_bodies`, which adds a shortened body to every summary on the page. That turns triage into a single call — "which of my unread messages need attention" — instead of one `get_email` per message, and the full message is still one `get_email` away where the preview shows it matters. Bodies are the plain-text part when the message has one, and otherwise the HTML part reduced to the text a reader would see, flagged by `body_from_html`. Stripping happens before shortening, so the character budget buys readable text rather than markup, and `body_truncated` marks a body cut short. `get_email` still returns both parts as they were sent, HTML included. Because bodies are far larger than envelopes, a page carrying them is capped at 10 messages: a larger `limit` is refused rather than silently trimmed, and an omitted one defaults to 10. Previews are peeked like every other read, so triaging unread mail leaves it unread.
+
 For the next page, pass the returned `next_before_uid` back as `before_uid`, together with `uidvalidity`. Mail arriving between two calls then cannot shift or repeat a result, which plain `offset` paging cannot promise. `offset` still works, but the two cannot be combined, and the call fails rather than paging a mailbox whose `uidvalidity` changed.
 
 Attachments come back in two ways. `get_attachment` returns the bytes inline—images as image content and other files as base64—which puts them in the conversation. `save_attachment` writes the decoded bytes to a path and returns only the path, so a large attachment never reaches the model's context.
@@ -364,6 +366,13 @@ A replacement gets a new UID. Baryon appends it before removing the previous dra
 
 <details>
 <summary>Limits and platform notes</summary>
+
+Reading limits:
+
+- 50,000 characters each for the plain-text and HTML bodies `get_email` returns.
+- 2,000 characters per shortened body, in both `get_thread` and the listing tools, counted after markup is stripped.
+- 10 messages per page when `list_emails` or `search_emails` is called with `include_bodies`; 100 without it.
+- 50 messages per conversation from `get_thread`, keeping the most recent.
 
 Draft limits:
 
