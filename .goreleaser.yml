@@ -124,33 +124,6 @@ homebrew_casks:
     # A prerelease tag such as v0.4.0-rc1 must not become the cask's current version.
     skip_upload: auto
 
-winget:
-  - name: baryon-mcp
-    publisher: combor
-    package_identifier: Combor.BaryonMCP
-    package_name: Baryon MCP
-    short_description: Read Proton Mail and save drafts through your local Proton Mail Bridge.
-    description: A local, permission-limited MCP bridge between Proton Mail and the AI you choose.
-    installation_notes: Run "baryon-mcp setup" after Proton Mail Bridge is installed and running.
-    license: BSD-3-Clause
-    license_url: https://github.com/combor/baryon-mcp/blob/main/LICENSE
-    homepage: https://github.com/combor/baryon-mcp
-    publisher_url: https://github.com/combor
-    publisher_support_url: https://github.com/combor/baryon-mcp/issues
-    default_locale: en-GB
-    ids:
-      - baryon-mcp
-    tags:
-      - email
-      - mcp
-      - proton-mail
-      - proton-mail-bridge
-    # The release workflow validates and installs these manifests on Windows
-    # before it commits them to the fork and opens the upstream pull request.
-    skip_upload: true
-    repository:
-      owner: combor
-      name: winget-pkgs
 
 changelog:
   disable: true

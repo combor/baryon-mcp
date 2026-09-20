@@ -3,7 +3,7 @@
   "manifest_version": "0.4",
   "name": "baryon-mcp",
   "display_name": "Baryon — Proton Mail via Bridge",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "description": "Read Proton Mail and save drafts through your local Proton Mail Bridge.",
   "long_description": "Baryon exposes your Proton Mail mailbox to MCP clients as eleven tools: list folders, list/search emails, read a message, read a whole conversation, list, fetch and save attachments, list your sender addresses, and save a draft or a standards-correct reply draft. It talks IMAP to the Proton Mail Bridge running on your machine over loopback only, authenticates Bridge by pinning its TLS certificate, and keeps draft saving as its only mailbox write capability — it cannot send, move, or generally delete messages or change flags. Message content is labelled as sender-controlled in every response that carries it. Local file access is confined to a managed attachment folder by default, or to folders you choose, and reading can be restricted to a folder allowlist.",
   "author": {
