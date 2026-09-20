@@ -3,7 +3,7 @@
   "name": "io.github.combor/baryon-mcp",
   "title": "Baryon — Proton Mail via Bridge",
   "description": "Read Proton Mail and save drafts through your local Proton Mail Bridge.",
-  "version": "0.5.1",
+  "version": "0.6.0",
   "websiteUrl": "https://github.com/combor/baryon-mcp",
   "repository": {
     "url": "https://github.com/combor/baryon-mcp",
@@ -13,40 +13,40 @@
   "packages": [
     {
       "registryType": "mcpb",
-      "identifier": "https://github.com/combor/baryon-mcp/releases/download/v0.5.1/baryon-mcp-darwin-amd64.mcpb",
-      "version": "0.5.1",
+      "identifier": "https://github.com/combor/baryon-mcp/releases/download/v0.6.0/baryon-mcp-darwin-amd64.mcpb",
+      "version": "0.6.0",
       "transport": {
         "type": "stdio"
       }
     },
     {
       "registryType": "mcpb",
-      "identifier": "https://github.com/combor/baryon-mcp/releases/download/v0.5.1/baryon-mcp-darwin-arm64.mcpb",
-      "version": "0.5.1",
+      "identifier": "https://github.com/combor/baryon-mcp/releases/download/v0.6.0/baryon-mcp-darwin-arm64.mcpb",
+      "version": "0.6.0",
       "transport": {
         "type": "stdio"
       }
     },
     {
       "registryType": "mcpb",
-      "identifier": "https://github.com/combor/baryon-mcp/releases/download/v0.5.1/baryon-mcp-linux-amd64.mcpb",
-      "version": "0.5.1",
+      "identifier": "https://github.com/combor/baryon-mcp/releases/download/v0.6.0/baryon-mcp-linux-amd64.mcpb",
+      "version": "0.6.0",
       "transport": {
         "type": "stdio"
       }
     },
     {
       "registryType": "mcpb",
-      "identifier": "https://github.com/combor/baryon-mcp/releases/download/v0.5.1/baryon-mcp-linux-arm64.mcpb",
-      "version": "0.5.1",
+      "identifier": "https://github.com/combor/baryon-mcp/releases/download/v0.6.0/baryon-mcp-linux-arm64.mcpb",
+      "version": "0.6.0",
       "transport": {
         "type": "stdio"
       }
     },
     {
       "registryType": "mcpb",
-      "identifier": "https://github.com/combor/baryon-mcp/releases/download/v0.5.1/baryon-mcp-windows-amd64.mcpb",
-      "version": "0.5.1",
+      "identifier": "https://github.com/combor/baryon-mcp/releases/download/v0.6.0/baryon-mcp-windows-amd64.mcpb",
+      "version": "0.6.0",
       "transport": {
         "type": "stdio"
       }
