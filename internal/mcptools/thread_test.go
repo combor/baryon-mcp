@@ -21,19 +21,19 @@ func fakeThread() *bridgeclient.Thread {
 				Summary: bridgeclient.EmailSummary{
 					UID: 4, Subject: "Plans", From: []string{"a@x"},
 					Date: time.Date(2026, 7, 1, 10, 0, 0, 0, time.UTC),
+					Body: "first",
 				},
 				MessageID: "root@test",
-				Body:      "first",
 			},
 			{
 				Summary: bridgeclient.EmailSummary{
 					UID: 9, Subject: "Re: Plans", From: []string{"b@x"}, Seen: true,
-					Date: time.Date(2026, 7, 2, 10, 0, 0, 0, time.UTC),
+					Date:          time.Date(2026, 7, 2, 10, 0, 0, 0, time.UTC),
+					Body:          "<p>second</p>",
+					BodyFromHTML:  true,
+					BodyTruncated: true,
 				},
-				MessageID:     "reply@test",
-				Body:          "<p>second</p>",
-				BodyIsHTML:    true,
-				BodyTruncated: true,
+				MessageID: "reply@test",
 			},
 		},
 	}
@@ -79,7 +79,7 @@ func TestGetThreadReturnsConversation(t *testing.T) {
 	if out.Messages[0].Date != "2026-07-01T10:00:00Z" {
 		t.Errorf("date = %q", out.Messages[0].Date)
 	}
-	if !out.Messages[1].BodyIsHTML || !out.Messages[1].BodyTruncated || !out.Messages[1].Seen {
+	if !out.Messages[1].BodyFromHTML || !out.Messages[1].BodyTruncated || !out.Messages[1].Seen {
 		t.Errorf("flags lost: %+v", out.Messages[1])
 	}
 }
@@ -117,9 +117,9 @@ func TestGetThreadDefaultsSearchFolder(t *testing.T) {
 func TestGetThreadOmitsBodiesByDefault(t *testing.T) {
 	thread := fakeThread()
 	for i := range thread.Messages {
-		thread.Messages[i].Body = ""
-		thread.Messages[i].BodyIsHTML = false
-		thread.Messages[i].BodyTruncated = false
+		thread.Messages[i].Summary.Body = ""
+		thread.Messages[i].Summary.BodyFromHTML = false
+		thread.Messages[i].Summary.BodyTruncated = false
 	}
 	res := callTool(t, newTestSession(t, &fakeBridge{thread: thread}), "get_thread", msgRefArgs())
 

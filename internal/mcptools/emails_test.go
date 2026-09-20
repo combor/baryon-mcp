@@ -3,6 +3,7 @@ package mcptools
 import (
 	"context"
 	"encoding/json"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -146,6 +147,96 @@ func TestListingsRejectPartialAndConflictingCursors(t *testing.T) {
 	}
 	if fake.gotQuery.folder != "" {
 		t.Error("an invalid page request reached the bridge")
+	}
+}
+
+func TestListingsPassIncludeBodiesThrough(t *testing.T) {
+	for _, tool := range []string{"list_emails", "search_emails"} {
+		fake := &fakeBridge{}
+		session := newTestSession(t, fake)
+
+		callTool(t, session, tool, map[string]any{"folder": "INBOX"})
+		if fake.gotQuery.page.IncludeBodies {
+			t.Errorf("%s: include_bodies should default to false", tool)
+		}
+
+		callTool(t, session, tool, map[string]any{"folder": "INBOX", "include_bodies": true})
+		if !fake.gotQuery.page.IncludeBodies {
+			t.Errorf("%s: include_bodies not passed through", tool)
+		}
+	}
+}
+
+// Asking for bodies without naming a limit must not run into the cap.
+func TestIncludeBodiesDefaultsToItsOwnLimit(t *testing.T) {
+	fake := &fakeBridge{}
+	session := newTestSession(t, fake)
+
+	callTool(t, session, "list_emails", map[string]any{"folder": "INBOX", "include_bodies": true})
+	if fake.gotQuery.page.Limit != maxPreviewLimit {
+		t.Errorf("default limit with bodies = %d, want %d", fake.gotQuery.page.Limit, maxPreviewLimit)
+	}
+
+	callTool(t, session, "list_emails", map[string]any{"folder": "INBOX", "include_bodies": true, "limit": maxPreviewLimit})
+	if fake.gotQuery.page.Limit != maxPreviewLimit {
+		t.Errorf("explicit limit at the cap = %d, want %d", fake.gotQuery.page.Limit, maxPreviewLimit)
+	}
+
+	// A negative limit is rewritten to the plain default, which is above the cap.
+	callTool(t, session, "list_emails", map[string]any{"folder": "INBOX", "include_bodies": true, "limit": -1})
+	if fake.gotQuery.page.Limit != maxPreviewLimit {
+		t.Errorf("negative limit with bodies = %d, want %d", fake.gotQuery.page.Limit, maxPreviewLimit)
+	}
+}
+
+func TestIncludeBodiesRefusesAnOversizedPage(t *testing.T) {
+	for _, tool := range []string{"list_emails", "search_emails"} {
+		fake := &fakeBridge{}
+		res := callTool(t, newTestSession(t, fake), tool, map[string]any{
+			"folder": "INBOX", "include_bodies": true, "limit": maxLimit,
+		})
+		if !res.IsError {
+			t.Fatalf("%s: expected an error for a page of bodies above the cap", tool)
+		}
+		text := res.Content[0].(*mcp.TextContent).Text
+		if !strings.Contains(text, "include_bodies") || !strings.Contains(text, strconv.Itoa(maxPreviewLimit)) {
+			t.Errorf("%s: error %q should name include_bodies and the %d-message cap", tool, text, maxPreviewLimit)
+		}
+		if fake.gotQuery.folder != "" {
+			t.Errorf("%s: an oversized page reached the bridge", tool)
+		}
+	}
+}
+
+func TestSummariesCarryBodies(t *testing.T) {
+	fake := &fakeBridge{page: &bridgeclient.MessagePage{UIDValidity: 42, Total: 2, Emails: []bridgeclient.EmailSummary{
+		{UID: 9, Subject: "hi", Body: "plain preview"},
+		{UID: 8, Subject: "there", Body: "<p>markup</p>", BodyFromHTML: true, BodyTruncated: true},
+	}}}
+	session := newTestSession(t, fake)
+
+	out := decodePage(t, callTool(t, session, "list_emails", map[string]any{"folder": "INBOX", "include_bodies": true}))
+	if out.Emails[0].Body != "plain preview" || out.Emails[0].BodyFromHTML || out.Emails[0].BodyTruncated {
+		t.Errorf("plain summary = %+v", out.Emails[0])
+	}
+	if out.Emails[1].Body != "<p>markup</p>" || !out.Emails[1].BodyFromHTML || !out.Emails[1].BodyTruncated {
+		t.Errorf("html summary = %+v", out.Emails[1])
+	}
+}
+
+// Bodies make a duplicated page expensive.
+func TestListingsDoNotEchoThePageAsText(t *testing.T) {
+	fake := &fakeBridge{page: &bridgeclient.MessagePage{UIDValidity: 42, Total: 1, Emails: []bridgeclient.EmailSummary{
+		{UID: 9, Subject: "hi", Body: "plain preview"},
+	}}}
+	session := newTestSession(t, fake)
+
+	res := callTool(t, session, "list_emails", map[string]any{"folder": "INBOX", "include_bodies": true})
+	if len(res.Content) != 0 {
+		t.Errorf("page echoed into %d content blocks: %#v", len(res.Content), res.Content)
+	}
+	if res.StructuredContent == nil {
+		t.Error("structured content dropped")
 	}
 }
 

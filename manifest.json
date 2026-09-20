@@ -101,8 +101,8 @@
   },
   "tools": [
     { "name": "list_folders", "description": "List the folders in the mailbox that this server may read" },
-    { "name": "list_emails", "description": "List messages in a folder, newest first, with stable cursor pagination" },
-    { "name": "search_emails", "description": "Search messages by text, sender, recipient, subject, date range, or unread state" },
+    { "name": "list_emails", "description": "List messages in a folder, newest first, with stable cursor pagination and optional shortened bodies" },
+    { "name": "search_emails", "description": "Search messages by text, sender, recipient, subject, date range, or unread state, with optional shortened bodies" },
     { "name": "get_email", "description": "Read one message's metadata, reply addresses, text bodies, and attachment list" },
     { "name": "get_thread", "description": "Read a whole conversation from one of its messages, oldest first, optionally with shortened bodies" },
     { "name": "list_attachments", "description": "List a message's attachments without transferring content" },
