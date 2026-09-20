@@ -3,6 +3,7 @@ package mailparse
 import (
 	"html"
 	"strings"
+	"unicode"
 )
 
 // hiddenElements hold markup or metadata rather than readable text. head is
@@ -174,9 +175,11 @@ func collapse(s string) string {
 	broke, spaced := false, false
 	for _, r := range s {
 		switch {
-		case r == '\n' || r == '\r':
+		case r == '\n' || r == '\r' || r == '\u2028' || r == '\u2029':
 			broke = true
-		case r == ' ' || r == '\t' || r == '\v' || r == '\f' || r == 0xA0:
+		case invisible(r):
+			// Renders as nothing, so it is not even a space.
+		case unicode.IsSpace(r):
 			spaced = true
 		default:
 			switch {
@@ -191,6 +194,16 @@ func collapse(s string) string {
 		}
 	}
 	return out.String()
+}
+
+// invisible reports whether r occupies no width when rendered. Marketing mail
+// pads the preheader — the line a client shows beside the subject — with long
+// runs of these, which would otherwise spend the whole preview budget before
+// the message begins. The combining grapheme joiner is named on its own
+// because it is a mark rather than a format character, and the rest of its
+// category carries real accents.
+func invisible(r rune) bool {
+	return r == '\u034f' || unicode.Is(unicode.Cf, r)
 }
 
 func isAlpha(b byte) bool { return b|0x20 >= 'a' && b|0x20 <= 'z' }

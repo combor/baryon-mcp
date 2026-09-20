@@ -53,6 +53,32 @@ func TestHTMLToText(t *testing.T) {
 	}
 }
 
+// Preheader padding is invisible, so it must not reach the preview at all.
+func TestHTMLToTextDropsInvisiblePadding(t *testing.T) {
+	// Soft hyphen, ZWNJ, combining grapheme joiner, ZWSP, word joiner, BOM.
+	pad := strings.Repeat("\u00ad\u200c\u034f\u200b\u2060\ufeff ", 300)
+	got := HTMLToText("<p>Ordered: a bed</p>" + pad + "<p>Arriving Tuesday</p>")
+
+	if want := "Ordered: a bed\nArriving Tuesday"; got != want {
+		t.Errorf("body = %q, want %q", got, want)
+	}
+}
+
+// Dropping format characters must not reach the combining marks that carry
+// real accents.
+func TestHTMLToTextKeepsCombiningAccents(t *testing.T) {
+	cases := map[string]string{
+		"decomposed e-acute":  "cafe\u0301",  // e + COMBINING ACUTE ACCENT
+		"decomposed o-umlaut": "scho\u0308n", // o + COMBINING DIAERESIS
+		"devanagari":          "\u0939\u093f\u0928\u094d\u0926\u0940",
+	}
+	for name, in := range cases {
+		if got := HTMLToText("<p>" + in + "</p>"); got != in {
+			t.Errorf("%s: HTMLToText(%q) = %q, want it unchanged", name, in, got)
+		}
+	}
+}
+
 // A preview is shortened after stripping, so the budget has to buy readable
 // text rather than markup.
 func TestHTMLToTextRecoversBudgetFromMarkup(t *testing.T) {
