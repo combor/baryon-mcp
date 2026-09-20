@@ -3,7 +3,7 @@
 # golang:1.27.1-trixie, keep in step with the toolchain in go.mod.
 # Compilation runs on the build machine's own platform and cross-compiles with
 # GOARCH, so building the arm64 image needs no emulation.
-FROM --platform=$BUILDPLATFORM golang@sha256:9baa6b4187bbb98d240372a8a235ac0bb6b5ddd52bba1431dc2f7c0705862728 AS build
+FROM --platform=$BUILDPLATFORM golang@sha256:433790e515d27dc6003e847e644cc0af956985cf315c1c58a3b73ee2dd305183 AS build
 
 WORKDIR /src
 
@@ -22,7 +22,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     go build -trimpath -ldflags "-s -w -X main.version=$VERSION" -o /baryon-mcp ./cmd/baryon-mcp
 
 # gcr.io/distroless/static-debian13:nonroot — no shell, no package manager.
-FROM gcr.io/distroless/static-debian13@sha256:1c2c046bc09ed40fad370b599a0b1ae7987f55b01e247cf27a7c27cd97e5bbc7
+FROM gcr.io/distroless/static-debian13@sha256:58133991db06659feaabe0f4e97a35cebf15ef4ea08f8a4c6d2ee5f75e4aa6a0
 
 LABEL org.opencontainers.image.title="baryon-mcp" \
       org.opencontainers.image.description="Read Proton Mail and save drafts through your local Proton Mail Bridge." \
