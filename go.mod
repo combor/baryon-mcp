@@ -5,8 +5,8 @@ go 1.27.1
 require (
 	github.com/emersion/go-imap/v2 v2.0.0-beta.8
 	github.com/emersion/go-message v0.18.2
-	github.com/modelcontextprotocol/go-sdk v1.7.0
-	github.com/urfave/cli/v3 v3.11.0
+	github.com/modelcontextprotocol/go-sdk v1.8.0
+	github.com/urfave/cli/v3 v3.12.0
 	github.com/zalando/go-keyring v0.2.8
 	golang.org/x/term v0.46.0
 )

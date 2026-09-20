@@ -20,7 +20,7 @@ import (
 )
 
 // version is overridden at build time via -ldflags "-X main.version=...".
-var version = "0.5.1-dev"
+var version = "0.6.1-dev"
 
 func main() {
 	// stdout carries the MCP JSON-RPC stream; everything else goes to stderr.
