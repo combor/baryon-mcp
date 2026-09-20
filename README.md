@@ -97,6 +97,19 @@ macOS:
 brew install --cask combor/tap/baryon-mcp
 ```
 
+Windows, with [Scoop](https://scoop.sh):
+
+```powershell
+scoop bucket add combor https://github.com/combor/scoop-bucket
+scoop install combor/baryon-mcp
+```
+
+Nix, from the package repository:
+
+```sh
+nix-env -iA nur.repos.combor.baryon-mcp
+```
+
 Arch Linux — [`baryon-mcp-bin`](https://aur.archlinux.org/packages/baryon-mcp-bin) from the AUR:
 
 ```sh
