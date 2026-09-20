@@ -108,6 +108,9 @@ jobs:
           fi
           umask 077
           printf '%s\n' "$RPM_GPG_PRIVATE_KEY" > "$RUNNER_TEMP/rpm-signing-private.asc"
+      # goreleaser's nix publisher shells out to nix-hash, which the runner
+      # image does not ship.
+      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
         with:
@@ -122,6 +125,9 @@ jobs:
           # The job's own token cannot write to combor/homebrew-tap, so the cask
           # needs a PAT with contents write access to that repository.
           HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+          # Same reasoning for the self-hosted Scoop bucket and Nix user repository.
+          SCOOP_BUCKET_GITHUB_TOKEN: ${{ secrets.SCOOP_BUCKET_GITHUB_TOKEN }}
+          NUR_GITHUB_TOKEN: ${{ secrets.NUR_GITHUB_TOKEN }}
           # Developer ID certificate and App Store Connect key used to sign and
           # notarize the darwin binaries.
           MACOS_SIGN_P12: ${{ secrets.MACOS_SIGN_P12 }}
