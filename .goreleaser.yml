@@ -125,5 +125,36 @@ homebrew_casks:
     skip_upload: auto
 
 
+scoops:
+  - name: baryon-mcp
+    homepage: https://github.com/combor/baryon-mcp
+    description: Read Proton Mail and save drafts through your local Proton Mail Bridge.
+    license: BSD-3-Clause
+    repository:
+      owner: combor
+      name: scoop-bucket
+      branch: main
+      token: '{{ .Env.SCOOP_BUCKET_GITHUB_TOKEN }}'
+    # A prerelease tag such as v0.4.0-rc1 must not become the bucket's current version.
+    skip_upload: auto
+
+nix:
+  - name: baryon-mcp
+    homepage: https://github.com/combor/baryon-mcp
+    description: Read Proton Mail and save drafts through your local Proton Mail Bridge.
+    license: bsd3
+    main_program: baryon-mcp
+    repository:
+      owner: combor
+      name: nur
+      branch: main
+      token: '{{ .Env.NUR_GITHUB_TOKEN }}'
+    # A prerelease tag such as v0.4.0-rc1 must not become the package's current version.
+    skip_upload: auto
+    install: |-
+      mkdir -p $out/bin
+      cp -vr ./baryon-mcp $out/bin/baryon-mcp
+
+
 changelog:
   disable: true
