@@ -107,7 +107,7 @@ scoop install combor/baryon-mcp
 Nix, from the package repository:
 
 ```sh
-nix-env -iA nur.repos.combor.baryon-mcp
+nix-env -f https://github.com/combor/nur/archive/main.tar.gz -iA baryon-mcp
 ```
 
 Arch Linux — [`baryon-mcp-bin`](https://aur.archlinux.org/packages/baryon-mcp-bin) from the AUR:
