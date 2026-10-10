@@ -410,7 +410,7 @@ Attachment roots are pinned by identity when the server starts. Replacing a root
 
 ## Development
 
-Building from source requires Go 1.27.1 or later.
+Building from source requires Go 1.27.2 or later.
 
 ```sh
 make build      # build ./baryon-mcp
