@@ -12,11 +12,14 @@ import (
 	"github.com/emersion/go-message/charset"
 )
 
-// TextResult is a decoded text part.
+// TextResult is a decoded text part. DecodeFallback reports a transfer
+// encoding that did not decode cleanly: Text then holds the raw payload, or
+// what decoded before the damage.
 type TextResult struct {
 	Text            string
 	Truncated       bool
 	CharsetFallback bool
+	DecodeFallback  bool
 }
 
 // DecodeText decodes a text part payload: content-transfer-encoding, then
@@ -24,8 +27,8 @@ type TextResult struct {
 // cut short before transfer, so base64 input is trimmed to a 4-byte boundary
 // and decoder errors at the cut are tolerated.
 func DecodeText(raw []byte, encoding, charsetLabel string, preTruncated bool, maxChars int) TextResult {
-	decoded := decodeCTE(raw, encoding, preTruncated)
-	res := TextResult{Truncated: preTruncated}
+	decoded, damaged := decodeCTE(raw, encoding, preTruncated)
+	res := TextResult{Truncated: preTruncated, DecodeFallback: damaged}
 
 	text, fallback := toUTF8(decoded, charsetLabel)
 	res.CharsetFallback = fallback
@@ -59,7 +62,27 @@ func DecodeBinary(raw []byte, encoding string) ([]byte, error) {
 	}
 }
 
-func decodeCTE(raw []byte, encoding string, tolerant bool) []byte {
+// DecodeBinaryLenient decodes an attachment payload the way mail clients do:
+// base64 padding may be missing, and decoding stops at damage rather than
+// failing. The bool reports damage, in which case the bytes are those that
+// decoded before it.
+func DecodeBinaryLenient(raw []byte, encoding string) ([]byte, bool) {
+	switch strings.ToLower(encoding) {
+	case "base64":
+		unpadded := bytes.TrimRight(cleanBase64(raw), "=")
+		data, err := io.ReadAll(base64.NewDecoder(base64.RawStdEncoding, bytes.NewReader(unpadded)))
+		return data, err != nil
+	case "quoted-printable":
+		data, err := io.ReadAll(quotedprintable.NewReader(bytes.NewReader(raw)))
+		return data, err != nil
+	default: // 7bit, 8bit, binary, empty
+		return raw, false
+	}
+}
+
+// decodeCTE decodes a text payload's transfer encoding, reporting damage
+// outside tolerant mode, where errors at a deliberate cut are expected.
+func decodeCTE(raw []byte, encoding string, tolerant bool) ([]byte, bool) {
 	switch strings.ToLower(encoding) {
 	case "base64":
 		cleaned := cleanBase64(raw)
@@ -68,17 +91,20 @@ func decodeCTE(raw []byte, encoding string, tolerant bool) []byte {
 		}
 		decoded, err := io.ReadAll(base64.NewDecoder(base64.StdEncoding, bytes.NewReader(cleaned)))
 		if err != nil && !tolerant {
-			return raw
+			return raw, true
 		}
-		return decoded // best effort: everything readable before any error
+		return decoded, false // best effort: everything readable before any error
 	case "quoted-printable":
 		decoded, err := io.ReadAll(quotedprintable.NewReader(bytes.NewReader(raw)))
-		if err != nil && !tolerant && len(decoded) == 0 {
-			return raw
+		if err != nil && !tolerant {
+			if len(decoded) == 0 {
+				return raw, true
+			}
+			return decoded, true
 		}
-		return decoded
+		return decoded, false
 	default:
-		return raw
+		return raw, false
 	}
 }
 

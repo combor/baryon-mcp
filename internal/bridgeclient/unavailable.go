@@ -41,6 +41,10 @@ func (Unavailable) GetAttachment(context.Context, string, uint32, uint32, int) (
 	return nil, ErrUnconfigured
 }
 
+func (Unavailable) GetMessageSource(context.Context, string, uint32, uint32, SourceParts) (*MessageSource, error) {
+	return nil, ErrUnconfigured
+}
+
 func (Unavailable) SaveDraft(context.Context, Draft) (*SavedDraft, error) {
 	return nil, ErrUnconfigured
 }

@@ -10,10 +10,10 @@ import (
 	"slices"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/emersion/go-imap/v2"
 	"github.com/emersion/go-imap/v2/imapclient"
+	"github.com/emersion/go-message"
 	messageMail "github.com/emersion/go-message/mail"
 )
 
@@ -26,7 +26,9 @@ const (
 	MaxDraftAttachmentTotalBytes = 25_000_000
 	// MaxDraftMessageBytes is the exclusive limit for the generated RFC822/MIME message.
 	MaxDraftMessageBytes = 70 * 1024 * 1024
-	// MaxDraftBodyChars bounds each decoded text body.
+	// MaxDraftBodyChars bounds each body a caller writes and each body a read
+	// returns. A draft composed around a carried original is bounded by the
+	// generated-message limit instead.
 	MaxDraftBodyChars = 50_000
 )
 
@@ -83,19 +85,26 @@ func validateDraft(draft Draft) (draftAddresses, error) {
 			return addresses, fmt.Errorf("uidvalidity is required when replacing a draft")
 		}
 	}
-	if utf8.RuneCountInString(draft.TextBody) > MaxDraftBodyChars {
-		return addresses, fmt.Errorf("text_body is above the %d character limit", MaxDraftBodyChars)
-	}
-	if utf8.RuneCountInString(draft.HTMLBody) > MaxDraftBodyChars {
-		return addresses, fmt.Errorf("html_body is above the %d character limit", MaxDraftBodyChars)
-	}
 	if len(draft.Attachments) > MaxDraftAttachments {
 		return addresses, fmt.Errorf("a draft may contain at most %d attachments", MaxDraftAttachments)
 	}
 	total := 0
+	contentIDs := make(map[string]bool)
 	for i, attachment := range draft.Attachments {
 		if strings.TrimSpace(attachment.Filename) == "" {
 			return addresses, fmt.Errorf("attachment %d filename is required", i)
+		}
+		if id := attachment.ContentID; id != "" {
+			if draft.HTMLBody == "" {
+				return addresses, fmt.Errorf("attachment %d is inline but the draft has no HTML body to show it", i)
+			}
+			if !validContentID(id) {
+				return addresses, fmt.Errorf("attachment %d content ID %q is not a valid Content-ID", i, id)
+			}
+			if contentIDs[id] {
+				return addresses, fmt.Errorf("attachment %d repeats content ID %q", i, id)
+			}
+			contentIDs[id] = true
 		}
 		if strings.ContainsAny(attachment.Filename, "\x00\r\n") {
 			return addresses, fmt.Errorf("attachment %d filename contains control characters", i)
@@ -112,6 +121,22 @@ func validateDraft(draft Draft) (draftAddresses, error) {
 		total += len(attachment.Data)
 	}
 	return addresses, nil
+}
+
+// validContentID accepts the identifiers mail clients actually write:
+// printable ASCII without angle brackets, within the message identifier
+// length limit. RFC 2045 asks for msg-id syntax, but Gmail's ii_ identifiers
+// carry no "@", and refusing them would refuse every image Gmail embeds.
+func validContentID(id string) bool {
+	if id == "" || len(id) > MaxMsgIDBytes {
+		return false
+	}
+	for i := 0; i < len(id); i++ {
+		if c := id[i]; c < 0x21 || c > 0x7e || c == '<' || c == '>' {
+			return false
+		}
+	}
+	return true
 }
 
 func draftHeader(draft Draft, addresses draftAddresses, thread threadHeaders, now time.Time) (messageMail.Header, error) {
@@ -173,6 +198,9 @@ func buildDraftMessage(draft Draft, addresses draftAddresses, thread threadHeade
 	if err != nil {
 		return nil, err
 	}
+	if slices.ContainsFunc(draft.Attachments, func(a DraftAttachment) bool { return a.ContentID != "" }) {
+		return buildRelatedDraftMessage(header, draft)
+	}
 
 	var buf bytes.Buffer
 	if len(draft.Attachments) == 0 {
@@ -223,9 +251,11 @@ func buildDraftMessage(draft Draft, addresses draftAddresses, thread threadHeade
 		if err != nil {
 			return nil, err
 		}
+		mediaType, encoding := fileEncoding(mediaType, attachment.Data)
 		var attachmentHeader messageMail.AttachmentHeader
 		attachmentHeader.SetContentType(mediaType, params)
 		attachmentHeader.SetFilename(attachment.Filename)
+		attachmentHeader.Set("Content-Transfer-Encoding", encoding)
 		part, err := writer.CreateAttachment(attachmentHeader)
 		if err != nil {
 			return nil, err
@@ -242,6 +272,149 @@ func buildDraftMessage(draft Draft, addresses draftAddresses, thread threadHeade
 		return nil, err
 	}
 	return buf.Bytes(), nil
+}
+
+// buildRelatedDraftMessage writes a draft whose HTML body shows some of its
+// parts inline: mixed[related[alternative[plain, html], inline…], attachments…].
+// mail.Writer cannot nest multipart/related, so the tree is written with
+// message.Writer, which leaves every part's transfer encoding to the caller.
+func buildRelatedDraftMessage(header messageMail.Header, draft Draft) ([]byte, error) {
+	var buf bytes.Buffer
+	header.SetContentType("multipart/mixed", nil)
+	mixed, err := message.CreateWriter(&buf, header.Header)
+	if err != nil {
+		return nil, err
+	}
+
+	var relatedHeader message.Header
+	relatedHeader.SetContentType("multipart/related", map[string]string{"type": "multipart/alternative"})
+	related, err := mixed.CreatePart(relatedHeader)
+	if err != nil {
+		return nil, err
+	}
+	var alternativeHeader message.Header
+	alternativeHeader.SetContentType("multipart/alternative", nil)
+	alternative, err := related.CreatePart(alternativeHeader)
+	if err != nil {
+		return nil, err
+	}
+	for _, body := range []struct{ contentType, text string }{
+		{"text/plain", draft.TextBody},
+		{"text/html", draft.HTMLBody},
+	} {
+		bodyHeader := inlineHeader(body.contentType).Header
+		bodyHeader.Set("Content-Disposition", "inline")
+		bodyHeader.Set("Content-Transfer-Encoding", "quoted-printable")
+		part, err := alternative.CreatePart(bodyHeader)
+		if err != nil {
+			return nil, err
+		}
+		if err := writePart(part, body.text); err != nil {
+			return nil, err
+		}
+	}
+	if err := alternative.Close(); err != nil {
+		return nil, err
+	}
+
+	for i, attachment := range draft.Attachments {
+		if attachment.ContentID != "" {
+			if err := writeFilePart(related, i, attachment, "inline"); err != nil {
+				return nil, err
+			}
+		}
+	}
+	if err := related.Close(); err != nil {
+		return nil, err
+	}
+	for i, attachment := range draft.Attachments {
+		if attachment.ContentID == "" {
+			if err := writeFilePart(mixed, i, attachment, "attachment"); err != nil {
+				return nil, err
+			}
+		}
+	}
+	if err := mixed.Close(); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
+// writeFilePart writes one file part with the given disposition, carrying the
+// attachment's Content-ID when it has one.
+func writeFilePart(w *message.Writer, index int, attachment DraftAttachment, disposition string) error {
+	mediaType, params, err := parseDraftContentType(index, attachment.ContentType)
+	if err != nil {
+		return err
+	}
+	mediaType, encoding := fileEncoding(mediaType, attachment.Data)
+	var h message.Header
+	h.SetContentType(mediaType, params)
+	h.SetContentDisposition(disposition, map[string]string{"filename": attachment.Filename})
+	if attachment.ContentID != "" {
+		h.Set("Content-Id", "<"+attachment.ContentID+">")
+	}
+	h.Set("Content-Transfer-Encoding", encoding)
+	part, err := w.CreatePart(h)
+	if err != nil {
+		return err
+	}
+	if _, err := part.Write(attachment.Data); err != nil {
+		_ = part.Close()
+		return err
+	}
+	return part.Close()
+}
+
+// fileEncoding picks a file part's media type and transfer encoding. Files are
+// base64 except message types, which RFC 2045 section 6.4 confines to 7bit,
+// 8bit or binary: they travel unencoded, as 8bit when they hold non-ASCII
+// bytes. message/global is the exception RFC 6532 makes, and stays base64. The
+// 7bit and 8bit writers rewrite line endings and break long lines, so a message
+// not already in that canonical form travels as an opaque base64 file instead,
+// keeping its bytes and any signature over them intact.
+func fileEncoding(mediaType string, data []byte) (string, string) {
+	lower := strings.ToLower(mediaType)
+	if !strings.HasPrefix(lower, "message/") || lower == "message/global" {
+		return mediaType, "base64"
+	}
+	if !canonicalLines(data) {
+		return "application/octet-stream", "base64"
+	}
+	for _, b := range data {
+		if b >= 0x80 {
+			return mediaType, "8bit"
+		}
+	}
+	return mediaType, "7bit"
+}
+
+// canonicalLines reports whether data passes through a 7bit or 8bit writer
+// unchanged: every line ends in CRLF and holds at most 998 bytes, and no NUL,
+// which no IMAP literal carries, appears.
+func canonicalLines(data []byte) bool {
+	lineLen := 0
+	for i, b := range data {
+		switch {
+		case b == 0:
+			return false
+		case b == '\n':
+			if i == 0 || data[i-1] != '\r' {
+				return false
+			}
+			lineLen = 0
+		case b == '\r':
+			if i+1 == len(data) || data[i+1] != '\n' {
+				return false
+			}
+		default:
+			lineLen++
+			if lineLen > 998 {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 func findDraftsMailbox(cli *imapclient.Client) (string, error) {

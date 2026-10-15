@@ -119,6 +119,9 @@ func TestSaveReplyDraftDerivesTheWholeHeader(t *testing.T) {
 	if saved.Replace != nil {
 		t.Error("save_reply_draft must create a draft, never replace one")
 	}
+	if fake.sourceCalls != 0 {
+		t.Error("a reply without quote_original read the original whole")
+	}
 }
 
 func TestSaveReplyDraftValidatesItsReference(t *testing.T) {
@@ -294,4 +297,68 @@ func TestSaveDraftStaysAnnotatedDestructive(t *testing.T) {
 		return
 	}
 	t.Fatal("save_draft not registered")
+}
+
+func TestSaveReplyDraftRejectsOversizedBodies(t *testing.T) {
+	oversized := strings.Repeat("x", bridgeclient.MaxDraftBodyChars+1)
+	for _, field := range []string{"text_body", "html_body"} {
+		t.Run(field, func(t *testing.T) {
+			fake := &fakeBridge{email: parentEmail()}
+			session := newIdentitySession(t, fake)
+			res := callTool(t, session, "save_reply_draft", replyArgs(map[string]any{field: oversized}))
+			if !res.IsError {
+				t.Fatal("expected an error result")
+			}
+			if text := res.Content[0].(*mcp.TextContent).Text; !strings.Contains(text, field) {
+				t.Errorf("error %q should name %s", text, field)
+			}
+			if fake.saveDraftCalls != 0 {
+				t.Error("an oversized body reached the bridge")
+			}
+		})
+	}
+}
+
+func TestSaveReplyDraftQuotesTheOriginalOnRequest(t *testing.T) {
+	parent := parentEmail()
+	parent.HTML = &bridgeclient.TextBody{Text: `<p>the original body <img src="cid:chart@example.org"></p>`}
+	fake := &fakeBridge{
+		source: &bridgeclient.MessageSource{
+			Content: *parent,
+			Attachments: []bridgeclient.DraftAttachment{
+				{Filename: "chart.png", ContentType: "image/png", ContentID: "chart@example.org", Data: []byte("png")},
+			},
+		},
+		savedDraft: &bridgeclient.SavedDraft{Folder: "Drafts", UID: 11, UIDValidity: 5},
+	}
+	session := newIdentitySession(t, fake)
+
+	res := callTool(t, session, "save_reply_draft", replyArgs(map[string]any{
+		"text_body":      "Thanks, noted.",
+		"quote_original": true,
+		"attachments": []map[string]any{{
+			"filename": "reply.txt", "content_type": "text/plain",
+			"content_base64": base64.StdEncoding.EncodeToString([]byte("mine")),
+		}},
+	}))
+	if res.IsError {
+		t.Fatalf("tool errored: %v", res.Content)
+	}
+	if fake.sourceCalls != 1 || fake.gotSourceParts != bridgeclient.ReferencedInlineParts {
+		t.Errorf("source calls = %d with %v, want one read of the inline parts", fake.sourceCalls, fake.gotSourceParts)
+	}
+
+	saved := fake.gotDraft
+	if saved.Subject != "Re: Quarterly numbers" || len(saved.InReplyTo) != 1 || saved.InReplyTo[0] != "parent@example.org" {
+		t.Errorf("reply headers = %q, in-reply-to %v", saved.Subject, saved.InReplyTo)
+	}
+	if want := "Thanks, noted.\n\nAlice <alice@example.org> wrote:\n> the original body"; saved.TextBody != want {
+		t.Errorf("text body = %q, want %q", saved.TextBody, want)
+	}
+	if !strings.HasSuffix(saved.HTMLBody, `<blockquote type="cite"><p>the original body <img src="cid:chart@example.org"></p></blockquote>`) {
+		t.Errorf("html body = %q", saved.HTMLBody)
+	}
+	if len(saved.Attachments) != 2 || saved.Attachments[0].Filename != "reply.txt" || saved.Attachments[1].ContentID != "chart@example.org" {
+		t.Errorf("attachments = %+v, want the caller's file then the inline chart", saved.Attachments)
+	}
 }

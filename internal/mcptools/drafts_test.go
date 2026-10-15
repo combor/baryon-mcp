@@ -422,3 +422,23 @@ func TestToDraftChecksExactDecodedAttachmentSize(t *testing.T) {
 		t.Fatalf("error = %v, want exact decoded attachment limit", err)
 	}
 }
+
+func TestSaveDraftToolRejectsOversizedBodies(t *testing.T) {
+	oversized := strings.Repeat("x", bridgeclient.MaxDraftBodyChars+1)
+	for _, field := range []string{"text_body", "html_body"} {
+		t.Run(field, func(t *testing.T) {
+			fake := &fakeBridge{savedDraft: &bridgeclient.SavedDraft{Folder: "Drafts", UID: 9, UIDValidity: 42}}
+			session := newTestSession(t, fake)
+			res := callTool(t, session, "save_draft", map[string]any{"from": "alice@example.org", field: oversized})
+			if !res.IsError {
+				t.Fatal("expected an error result")
+			}
+			if text := res.Content[0].(*mcp.TextContent).Text; !strings.Contains(text, field) {
+				t.Errorf("error %q should name %s", text, field)
+			}
+			if fake.saveDraftCalls != 0 {
+				t.Error("an oversized body reached the bridge")
+			}
+		})
+	}
+}

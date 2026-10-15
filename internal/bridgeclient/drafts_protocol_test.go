@@ -163,6 +163,84 @@ func TestProtocolSavedDraftMaximumNonASCIIBodyIsReadable(t *testing.T) {
 	}
 }
 
+func TestProtocolSavedInlinePartRoundTrips(t *testing.T) {
+	client := seedDraftMailbox(t, false)
+	saved, err := client.SaveDraft(context.Background(), Draft{
+		From:     "alice@example.org",
+		TextBody: "plain",
+		HTMLBody: `<p><img src="cid:ii_l4f8z0w70"></p>`,
+		Attachments: []DraftAttachment{
+			{Filename: "logo.png", ContentType: "image/png", ContentID: "ii_l4f8z0w70", Data: []byte("logo")},
+			{Filename: "notes.txt", ContentType: "text/plain", Data: []byte("notes")},
+		},
+	})
+	if err != nil {
+		t.Fatalf("SaveDraft: %v", err)
+	}
+
+	source, err := client.GetMessageSource(context.Background(), saved.Folder, saved.UID, saved.UIDValidity, AllParts)
+	if err != nil {
+		t.Fatalf("GetMessageSource: %v", err)
+	}
+	if source.Content.HTML == nil || source.Content.HTML.Text != `<p><img src="cid:ii_l4f8z0w70"></p>` {
+		t.Errorf("html = %+v", source.Content.HTML)
+	}
+	if len(source.Attachments) != 2 {
+		t.Fatalf("attachments = %+v", source.Attachments)
+	}
+	if got := source.Attachments[0]; got.ContentID != "ii_l4f8z0w70" || string(got.Data) != "logo" || got.Filename != "logo.png" {
+		t.Errorf("inline part = %+v", got)
+	}
+	if got := source.Attachments[1]; got.ContentID != "" || string(got.Data) != "notes" {
+		t.Errorf("regular attachment = %+v", got)
+	}
+}
+
+// A forward reads its original whole and saves it back as a draft; every part
+// a real message can carry has to survive the draft writer.
+func TestProtocolMessageSourceSavesAsDraft(t *testing.T) {
+	client := startMemServerWithOptions(t, func(u *imapmemserver.User) {
+		for _, name := range []string{"INBOX", "Drafts"} {
+			if err := u.Create(name, nil); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if _, err := u.Append("INBOX", bytes.NewReader(relatedMessage("short")), &imap.AppendOptions{}); err != nil {
+			t.Fatal(err)
+		}
+	}, draftTestCaps, nil)
+	uid, uidval := liveRef(t, client)
+
+	source, err := client.GetMessageSource(context.Background(), "INBOX", uid, uidval, AllParts)
+	if err != nil {
+		t.Fatalf("GetMessageSource: %v", err)
+	}
+	saved, err := client.SaveDraft(context.Background(), Draft{
+		From:        "me@example.org",
+		Subject:     "Fwd: " + source.Content.Summary.Subject,
+		TextBody:    source.Content.Plain.Text,
+		HTMLBody:    source.Content.HTML.Text,
+		Attachments: source.Attachments,
+	})
+	if err != nil {
+		t.Fatalf("SaveDraft: %v", err)
+	}
+
+	carried, err := client.GetMessageSource(context.Background(), saved.Folder, saved.UID, saved.UIDValidity, AllParts)
+	if err != nil {
+		t.Fatalf("GetMessageSource of the draft: %v", err)
+	}
+	if len(carried.Attachments) != len(source.Attachments) {
+		t.Fatalf("draft carries %d attachments, want %d", len(carried.Attachments), len(source.Attachments))
+	}
+	for i, want := range source.Attachments {
+		got := carried.Attachments[i]
+		if got.Filename != want.Filename || got.ContentID != want.ContentID || !bytes.Equal(got.Data, want.Data) {
+			t.Errorf("attachment %d = %s %q, want %s %q with the same bytes", i, got.Filename, got.ContentID, want.Filename, want.ContentID)
+		}
+	}
+}
+
 func TestProtocolSavedDraftMaximumAttachmentIsReadable(t *testing.T) {
 	client := seedDraftMailbox(t, false)
 	want := bytes.Repeat([]byte{0xAB}, MaxDraftAttachmentBytes)

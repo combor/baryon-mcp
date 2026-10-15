@@ -25,6 +25,7 @@ Baryon has no hosted service. You decide which MCP client and AI model receive y
 - Read an email or an entire conversation.
 - Inspect, retrieve, and save attachments.
 - Prepare new messages as Proton Mail drafts.
+- Forward a message as a draft, with its attachments and embedded images.
 - Review, edit, and send those drafts yourself in Proton Mail.
 
 For example, you could ask your assistant:
@@ -47,6 +48,7 @@ For example, you could ask your assistant:
 | Save attachments locally | Yes, on macOS and Linux |
 | Create and replace drafts | Yes |
 | Save a derived reply draft | Yes |
+| Save a forward draft with the original's attachments | Yes |
 | Restrict reading to chosen folders | Optional |
 | Send email | No |
 | Move ordinary messages | No |
@@ -238,7 +240,7 @@ Baryon speaks stdio, so the client launches the container rather than connecting
 - Baryon refuses to send Bridge credentials to a non-loopback host.
 - Bridge's TLS certificate is pinned by default. Without a certificate, Baryon refuses to start unless insecure mode is explicitly enabled.
 - Read tools select mailboxes read-only and do not mark messages as read.
-- `save_draft` and `save_reply_draft` are the only tools that change the mailbox, and only inside Drafts. There are no send, move, general delete, or flag-changing tools.
+- `save_draft`, `save_reply_draft` and `save_forward_draft` are the only tools that change the mailbox, and only inside Drafts. There are no send, move, general delete, or flag-changing tools.
 - `save_attachment` is the only tool that writes to local disk. It never overwrites an existing file or creates a missing parent directory.
 - Local attachment reads and writes are confined to a managed folder by default, or to the directories chosen with `BARYON_ATTACHMENT_ROOTS`.
 - Reading can be limited to an allowlist of folders with `BARYON_ALLOWED_FOLDERS`. A folder outside it is refused before the mailbox is opened, and never appears in `list_folders`.
@@ -263,7 +265,8 @@ Baryon speaks stdio, so the client launches the container rather than connecting
 | `save_attachment` | Write one attachment to a local file and return only its path |
 | `list_sender_identities` | List the addresses a draft may be sent from |
 | `save_draft` | Create or replace a draft with text, HTML, Bcc recipients, and attachments from base64 or local file paths |
-| `save_reply_draft` | Save a reply to one message as a new draft, deriving recipients, subject and threading headers |
+| `save_reply_draft` | Save a reply to one message as a new draft, deriving recipients, subject and threading headers, optionally quoting the original |
+| `save_forward_draft` | Save a forward of one message as a new draft, carrying its whole text, HTML, attachments and inline images |
 
 </details>
 
@@ -347,7 +350,28 @@ Attachments come back in two ways. `get_attachment` returns the bytes inline—i
 - **Subject** keeps an existing `Re:` prefix, in any case, or gains one.
 - **Threading** sets `In-Reply-To` to the parent's `Message-ID` and `References` to its chain followed by it. A message with no `Message-ID` is refused: it cannot be threaded correctly, and `save_draft` remains available for it.
 
-The original body is not quoted and its attachments are not copied — pass whatever the reply should contain. The response echoes every derived field, so the recipients can be reviewed before you send the draft from Proton Mail. `save_reply_draft` only ever creates a draft; replacing one stays with `save_draft`.
+The original is quoted only when you set `quote_original`. It is then copied whole below your text, under an "On <date>, <sender> wrote:" line, with `> ` prefixes in plain text and a `<blockquote>` in HTML, together with the images its HTML shows inline. Its other attachments are never copied. The response echoes every derived field, so the recipients can be reviewed before you send the draft from Proton Mail. `save_reply_draft` only ever creates a draft; replacing one stays with `save_draft`.
+
+</details>
+
+<details>
+<summary>Forwarding</summary>
+
+`save_forward_draft` forwards one message. Pass the `folder`, `uid` and `uidvalidity` you read it with, the recipients, and optionally a note in `text_body` or `html_body`. Baryon reads the original and writes the draft itself, so neither the message nor its attachments pass through the conversation or touch local disk:
+
+- **Body** is your note, then a `---------- Forwarded message ----------` block naming the original's From, Date, Subject, To and Cc, then the original text and HTML copied whole. A plain-text original forwarded with a plain note stays plain text.
+- **Attachments** all travel with it. Images the original's HTML shows through `cid:` links stay inline; everything else is a regular attachment.
+- **Subject** keeps an existing `Fwd:` or `Fw:` prefix, in any case, or gains `Fwd:`.
+- **`from`** is chosen as for a reply. Recipients are optional and can be added in Proton Mail before sending.
+
+The draft carries no `In-Reply-To` or `References`, so it starts a new conversation for its recipients. An original whose body is above 2 MiB, or whose attachments exceed 100 files or 25 MB, is refused rather than cut short. `warning` reports text that could not be decoded exactly, and attachments whose encoding was damaged, which carry only what was readable.
+
+Things to know about forwards, and about replies that quote:
+
+- A draft carrying more than 50,000 characters cannot be replaced faithfully with `save_draft`, which reads it back truncated, and a replacement loses its inline images. Edit such a draft in Proton Mail instead.
+- Proton Mail keeps a draft's HTML body when it has one, and Bridge does not tell it which message a draft forwards, so the original is not marked as forwarded.
+- Nested attachment containers become separate files, and attachments without a filename get generated names such as `part-1.2.png`. Attachments keep their Content-Type parameters, such as a calendar invitation's method, except a charset other than UTF-8: such a text file keeps its bytes but loses its charset label.
+- The original HTML is embedded as it was sent, `<head>` styles included.
 
 </details>
 
@@ -383,12 +407,13 @@ Reading limits:
 
 Draft limits:
 
-- 50,000 characters each for plain-text and HTML bodies.
+- 50,000 characters each for the plain-text and HTML bodies you write. A forwarded or quoted original is carried whole, up to 2 MiB per body.
 - 100 regular attachments.
 - 100 message identifiers each in `in_reply_to` and `references`, with 512 bytes per identifier. A longer chain read from a message is trimmed to its most recent identifiers.
 - 25 MB decoded per attachment and in total, across both content sources.
 - Generated RFC822/MIME message below 70 MiB.
-- Standard base64 for inline content; inline CID attachments are not supported.
+- Standard base64 for inline content. `save_draft` cannot add inline CID images; forwards and quoted replies keep the original's.
+- Attached messages (`message/rfc822` and other `message/` types) travel unencoded, as MIME requires. One that is not in CRLF form, has a line over 998 bytes, or holds a NUL byte is attached as a generic `application/octet-stream` file instead, so its bytes, and any signature over them, stay exact. This applies to `save_draft` as well as forwards.
 - `content_path` and `save_attachment` are not available on Windows. Use `content_base64` and `get_attachment` there.
 
 Baryon speaks MCP `2026-07-28` and negotiates down to any earlier revision back to `2024-11-05`, so older clients keep working.

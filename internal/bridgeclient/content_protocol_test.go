@@ -237,3 +237,208 @@ func TestProtocolTextPartPartialCap(t *testing.T) {
 		t.Errorf("text length = %d, want char cap %d", got, bodyCharCap)
 	}
 }
+
+var pdfBytes = []byte("%PDF-1.7\n%\xe2\xe3\xcf\xd3\n1 0 obj")
+
+// latin2CSV is ISO-8859-2 text in a part labelled with that charset, a label
+// the draft writer refuses, so carrying it must keep the bytes and drop the label.
+var latin2CSV = []byte("miasto;kurs\n\xa3\xf3d\xbc;4,21\n")
+
+// newsletterPlain is a plain body far past the 50,000 characters a read for
+// the conversation keeps.
+var newsletterPlain = strings.Repeat(strings.Repeat("x", 98)+"\r\n", 1200)
+
+// invite is a calendar request, whose method parameter makes it one.
+var invite = []byte("BEGIN:VCALENDAR\r\nMETHOD:REQUEST\r\nEND:VCALENDAR\r\n")
+
+// relatedMessage carries an inline logo the HTML references, a PDF with an
+// unreferenced Content-ID as Apple Mail writes them, a Latin-2 CSV and a
+// calendar invitation.
+func relatedMessage(plain string) []byte {
+	var b strings.Builder
+	b.WriteString("From: Acme News <news@acme.example>\r\n")
+	b.WriteString("To: me@example.org\r\n")
+	b.WriteString("Subject: newsletter\r\n")
+	b.WriteString("Date: Mon, 12 Oct 2026 09:14:00 +0100\r\n")
+	b.WriteString("Message-ID: <news@acme.example>\r\n")
+	b.WriteString("MIME-Version: 1.0\r\n")
+	b.WriteString("Content-Type: multipart/mixed; boundary=OUTER\r\n\r\n")
+
+	b.WriteString("--OUTER\r\n")
+	b.WriteString("Content-Type: multipart/related; boundary=REL; type=\"multipart/alternative\"\r\n\r\n")
+	b.WriteString("--REL\r\n")
+	b.WriteString("Content-Type: multipart/alternative; boundary=ALT\r\n\r\n")
+	b.WriteString("--ALT\r\n")
+	b.WriteString("Content-Type: text/plain; charset=utf-8\r\n")
+	b.WriteString("Content-Transfer-Encoding: 7bit\r\n\r\n")
+	b.WriteString(plain + "\r\n")
+	b.WriteString("--ALT\r\n")
+	b.WriteString("Content-Type: text/html; charset=utf-8\r\n")
+	b.WriteString("Content-Transfer-Encoding: 7bit\r\n\r\n")
+	b.WriteString("<p>Hello <img src=\"cid:logo@acme.example\"></p>\r\n")
+	b.WriteString("--ALT--\r\n")
+	b.WriteString("--REL\r\n")
+	b.WriteString("Content-Type: image/png\r\n")
+	b.WriteString("Content-Transfer-Encoding: base64\r\n")
+	b.WriteString("Content-ID: <logo@acme.example>\r\n")
+	b.WriteString("Content-Disposition: inline; filename=\"logo.png\"\r\n\r\n")
+	b.WriteString(base64.StdEncoding.EncodeToString(pngBytes) + "\r\n")
+	b.WriteString("--REL--\r\n")
+
+	b.WriteString("--OUTER\r\n")
+	b.WriteString("Content-Type: application/pdf\r\n")
+	b.WriteString("Content-Transfer-Encoding: base64\r\n")
+	b.WriteString("Content-ID: <pdf@apple.example>\r\n")
+	b.WriteString("Content-Disposition: attachment; filename=\"report.pdf\"\r\n\r\n")
+	b.WriteString(base64.StdEncoding.EncodeToString(pdfBytes) + "\r\n")
+	b.WriteString("--OUTER\r\n")
+	b.WriteString("Content-Type: text/csv; charset=iso-8859-2\r\n")
+	b.WriteString("Content-Transfer-Encoding: base64\r\n")
+	b.WriteString("Content-Disposition: attachment; filename=\"rates.csv\"\r\n\r\n")
+	b.WriteString(base64.StdEncoding.EncodeToString(latin2CSV) + "\r\n")
+	b.WriteString("--OUTER\r\n")
+	b.WriteString("Content-Type: text/calendar; charset=utf-8; method=REQUEST\r\n")
+	b.WriteString("Content-Transfer-Encoding: 7bit\r\n")
+	b.WriteString("Content-Disposition: attachment; filename=\"invite.ics\"\r\n\r\n")
+	b.Write(invite)
+	b.WriteString("\r\n--OUTER--\r\n")
+	return []byte(b.String())
+}
+
+func seedSourceInbox(t *testing.T, raw []byte) (*Client, uint32, uint32) {
+	t.Helper()
+	c := startMemServer(t, func(u *imapmemserver.User) {
+		if err := u.Create("INBOX", nil); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := u.Append("INBOX", bytes.NewReader(raw), &imap.AppendOptions{}); err != nil {
+			t.Fatal(err)
+		}
+	})
+	uid, uidval := liveRef(t, c)
+	return c, uid, uidval
+}
+
+func TestProtocolGetMessageSourceCarriesEverything(t *testing.T) {
+	c, uid, uidval := seedSourceInbox(t, relatedMessage(newsletterPlain))
+
+	source, err := c.GetMessageSource(context.Background(), "INBOX", uid, uidval, AllParts)
+	if err != nil {
+		t.Fatalf("GetMessageSource: %v", err)
+	}
+	plain := source.Content.Plain
+	if plain == nil {
+		t.Fatal("plain body missing")
+	}
+	if plain.Truncated || plain.Text != newsletterPlain {
+		t.Fatalf("plain body was not carried whole: %d chars, truncated %v", len(plain.Text), plain.Truncated)
+	}
+	if source.Content.HTML == nil || !strings.Contains(source.Content.HTML.Text, "cid:logo@acme.example") {
+		t.Errorf("html = %+v", source.Content.HTML)
+	}
+	if source.Content.MessageID != "news@acme.example" || source.Content.Summary.Subject != "newsletter" {
+		t.Errorf("content = %+v", source.Content.Summary)
+	}
+
+	want := []DraftAttachment{
+		{Filename: "logo.png", ContentType: "image/png", ContentID: "logo@acme.example", Data: pngBytes},
+		{Filename: "report.pdf", ContentType: "application/pdf", Data: pdfBytes},
+		{Filename: "rates.csv", ContentType: "text/csv", Data: latin2CSV},
+		{Filename: "invite.ics", ContentType: "text/calendar; charset=utf-8; method=REQUEST", Data: invite},
+	}
+	if len(source.Attachments) != len(want) {
+		t.Fatalf("attachments = %+v, want %d", source.Attachments, len(want))
+	}
+	for i, w := range want {
+		got := source.Attachments[i]
+		if got.Filename != w.Filename || got.ContentType != w.ContentType || got.ContentID != w.ContentID || !bytes.Equal(got.Data, w.Data) {
+			t.Errorf("attachment %d = %s %s %q %d bytes, want %s %s %q %d bytes", i,
+				got.Filename, got.ContentType, got.ContentID, len(got.Data), w.Filename, w.ContentType, w.ContentID, len(w.Data))
+		}
+	}
+}
+
+func TestProtocolGetMessageSourceReferencedInlineOnly(t *testing.T) {
+	c, uid, uidval := seedSourceInbox(t, relatedMessage("short"))
+
+	source, err := c.GetMessageSource(context.Background(), "INBOX", uid, uidval, ReferencedInlineParts)
+	if err != nil {
+		t.Fatalf("GetMessageSource: %v", err)
+	}
+	if len(source.Attachments) != 1 || source.Attachments[0].ContentID != "logo@acme.example" {
+		t.Fatalf("attachments = %+v, want only the referenced logo", source.Attachments)
+	}
+}
+
+func TestProtocolGetMessageSourceRefusesOversizedBody(t *testing.T) {
+	c, uid, uidval := seedSourceInbox(t, relatedMessage(strings.Repeat("y", sourceTextPartCap+1)))
+
+	_, err := c.GetMessageSource(context.Background(), "INBOX", uid, uidval, AllParts)
+	if err == nil || !strings.Contains(err.Error(), "above the") {
+		t.Fatalf("error = %v, want the body refused", err)
+	}
+}
+
+func TestProtocolGetMessageSourceRefusesTooManyAttachments(t *testing.T) {
+	var b strings.Builder
+	b.WriteString("From: alice@example.org\r\nSubject: many\r\nMIME-Version: 1.0\r\n")
+	b.WriteString("Content-Type: multipart/mixed; boundary=B\r\n\r\n")
+	b.WriteString("--B\r\nContent-Type: text/plain\r\n\r\nbody\r\n")
+	for i := 0; i <= MaxDraftAttachments; i++ {
+		fmt.Fprintf(&b, "--B\r\nContent-Type: application/octet-stream\r\nContent-Disposition: attachment; filename=\"%d.bin\"\r\n\r\nx\r\n", i)
+	}
+	b.WriteString("--B--\r\n")
+	c, uid, uidval := seedSourceInbox(t, []byte(b.String()))
+
+	_, err := c.GetMessageSource(context.Background(), "INBOX", uid, uidval, AllParts)
+	if err == nil || !strings.Contains(err.Error(), "attachments") {
+		t.Fatalf("error = %v, want too many attachments refused", err)
+	}
+}
+
+func TestProtocolGetMessageSourceRefusesOversizedAttachments(t *testing.T) {
+	var b strings.Builder
+	b.WriteString("From: alice@example.org\r\nSubject: large\r\nMIME-Version: 1.0\r\n")
+	b.WriteString("Content-Type: multipart/mixed; boundary=B\r\n\r\n")
+	b.WriteString("--B\r\nContent-Type: text/plain\r\n\r\nbody\r\n")
+	line := strings.Repeat("A", 76) + "\r\n"
+	for i := 0; i < 2; i++ {
+		fmt.Fprintf(&b, "--B\r\nContent-Type: application/octet-stream\r\nContent-Transfer-Encoding: base64\r\nContent-Disposition: attachment; filename=\"%d.bin\"\r\n\r\n", i)
+		b.WriteString(strings.Repeat(line, sourceAttachmentCap/2/len(line)+1))
+	}
+	b.WriteString("--B--\r\n")
+	c, uid, uidval := seedSourceInbox(t, []byte(b.String()))
+
+	_, err := c.GetMessageSource(context.Background(), "INBOX", uid, uidval, AllParts)
+	if err == nil || !strings.Contains(err.Error(), "byte limit") {
+		t.Fatalf("error = %v, want oversized attachments refused", err)
+	}
+}
+
+// A sloppy original must still forward: damage is reported, not fatal.
+func TestProtocolGetMessageSourceToleratesDamagedEncodings(t *testing.T) {
+	var b strings.Builder
+	b.WriteString("From: alice@example.org\r\nSubject: sloppy\r\nMIME-Version: 1.0\r\n")
+	b.WriteString("Content-Type: multipart/mixed; boundary=B\r\n\r\n")
+	b.WriteString("--B\r\nContent-Type: text/plain\r\nContent-Transfer-Encoding: base64\r\n\r\n@@@@not base64!!\r\n")
+	b.WriteString("--B\r\nContent-Type: application/pdf\r\nContent-Transfer-Encoding: base64\r\n")
+	b.WriteString("Content-Disposition: attachment; filename=\"unpadded.pdf\"\r\n\r\nJVBERg\r\n")
+	b.WriteString("--B\r\nContent-Type: application/octet-stream\r\nContent-Transfer-Encoding: base64\r\n")
+	b.WriteString("Content-Disposition: attachment; filename=\"broken.bin\"\r\n\r\nJVBE@@@@\r\n")
+	b.WriteString("--B--\r\n")
+	c, uid, uidval := seedSourceInbox(t, []byte(b.String()))
+
+	source, err := c.GetMessageSource(context.Background(), "INBOX", uid, uidval, AllParts)
+	if err != nil {
+		t.Fatalf("GetMessageSource: %v", err)
+	}
+	if plain := source.Content.Plain; plain == nil || !plain.DecodeFallback {
+		t.Errorf("plain = %+v, want the undecodable body flagged", plain)
+	}
+	if len(source.Attachments) != 2 || string(source.Attachments[0].Data) != "%PDF" || string(source.Attachments[1].Data) != "%PD" {
+		t.Fatalf("attachments = %+v, want the unpadded PDF whole and the readable start of the broken file", source.Attachments)
+	}
+	if len(source.Damaged) != 1 || source.Damaged[0] != "broken.bin" {
+		t.Errorf("damaged = %v, want only broken.bin", source.Damaged)
+	}
+}

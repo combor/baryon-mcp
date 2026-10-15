@@ -3,6 +3,7 @@ package mcptools
 import (
 	"context"
 	"fmt"
+	"unicode/utf8"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -87,7 +88,22 @@ func draftAttachments(in []draftAttachmentInput, roots attachmentRoots) ([]bridg
 	return loaded, nil
 }
 
+// checkBodyLengths bounds the bodies a caller writes. An original a draft
+// carries is bounded where it is read instead.
+func checkBodyLengths(text, html string) error {
+	if utf8.RuneCountInString(text) > bridgeclient.MaxDraftBodyChars {
+		return fmt.Errorf("text_body is above the %d character limit", bridgeclient.MaxDraftBodyChars)
+	}
+	if utf8.RuneCountInString(html) > bridgeclient.MaxDraftBodyChars {
+		return fmt.Errorf("html_body is above the %d character limit", bridgeclient.MaxDraftBodyChars)
+	}
+	return nil
+}
+
 func toDraft(in saveDraftInput, roots attachmentRoots) (bridgeclient.Draft, error) {
+	if err := checkBodyLengths(in.TextBody, in.HTMLBody); err != nil {
+		return bridgeclient.Draft{}, err
+	}
 	if (in.UID == 0) != (in.UIDValidity == 0) {
 		return bridgeclient.Draft{}, fmt.Errorf("uid and uidvalidity must be supplied together when replacing a draft")
 	}
@@ -117,7 +133,7 @@ func toDraft(in saveDraftInput, roots attachmentRoots) (bridgeclient.Draft, erro
 func registerSaveDraft(server *mcp.Server, bridge bridgeclient.Bridge, roots attachmentRoots) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "save_draft",
-		Description: "Create a complete Proton Mail draft, or replace an existing draft when uid and uidvalidity are provided. Supports plain text, an optional HTML alternative, and bounded attachments supplied either inline as base64 (content_base64) or as a path inside the server's attachment directory that it reads at save time (content_path). To answer one message, save_reply_draft derives its recipients and threading for you. To reply inside a thread here, read the message with get_email and set in_reply_to to its message_id, and references to its references followed by its message_id; when it reports no references, use its in_reply_to in their place so earlier ancestry survives. A replacement keeps the previous draft's Message-ID, plus whichever of its In-Reply-To and References the call omits; passing an empty array for either removes it, detaching the draft from its thread. Updating appends the replacement before removing the old UID; inspect warning if cleanup was incomplete.",
+		Description: "Create a complete Proton Mail draft, or replace an existing draft when uid and uidvalidity are provided. Supports plain text, an optional HTML alternative, and bounded attachments supplied either inline as base64 (content_base64) or as a path inside the server's attachment directory that it reads at save time (content_path). To answer one message, save_reply_draft derives its recipients and threading for you; to forward one with its attachments, use save_forward_draft. To reply inside a thread here, read the message with get_email and set in_reply_to to its message_id, and references to its references followed by its message_id; when it reports no references, use its in_reply_to in their place so earlier ancestry survives. A replacement keeps the previous draft's Message-ID, plus whichever of its In-Reply-To and References the call omits; passing an empty array for either removes it, detaching the draft from its thread. Updating appends the replacement before removing the old UID; inspect warning if cleanup was incomplete.",
 		Annotations: draftAnnotations("Save draft", true),
 	}, func(ctx context.Context, req *mcp.CallToolRequest, in saveDraftInput) (*mcp.CallToolResult, saveDraftOutput, error) {
 		draft, err := toDraft(in, roots)

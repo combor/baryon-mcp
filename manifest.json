@@ -5,7 +5,7 @@
   "display_name": "Baryon — Proton Mail via Bridge",
   "version": "0.6.3",
   "description": "Read Proton Mail and save drafts through your local Proton Mail Bridge.",
-  "long_description": "Baryon exposes your Proton Mail mailbox to MCP clients as eleven tools: list folders, list/search emails, read a message, read a whole conversation, list, fetch and save attachments, list your sender addresses, and save a draft or a standards-correct reply draft. It talks IMAP to the Proton Mail Bridge running on your machine over loopback only, authenticates Bridge by pinning its TLS certificate, and keeps draft saving as its only mailbox write capability — it cannot send, move, or generally delete messages or change flags. Message content is labelled as sender-controlled in every response that carries it. Local file access is confined to a managed attachment folder by default, or to folders you choose, and reading can be restricted to a folder allowlist.",
+  "long_description": "Baryon exposes your Proton Mail mailbox to MCP clients as twelve tools: list folders, list/search emails, read a message, read a whole conversation, list, fetch and save attachments, list your sender addresses, and save a draft, a standards-correct reply draft that can quote the original, or a forward that carries the original whole with its attachments. It talks IMAP to the Proton Mail Bridge running on your machine over loopback only, authenticates Bridge by pinning its TLS certificate, and keeps draft saving as its only mailbox write capability — it cannot send, move, or generally delete messages or change flags. Message content is labelled as sender-controlled in every response that carries it. Local file access is confined to a managed attachment folder by default, or to folders you choose, and reading can be restricted to a folder allowlist.",
   "author": {
     "name": "Piotr Komborski"
   },
@@ -110,6 +110,7 @@
     { "name": "save_attachment", "description": "Write one attachment to a local file and return only its path, keeping large attachments out of the conversation" },
     { "name": "list_sender_identities", "description": "List the addresses a draft may be sent from" },
     { "name": "save_draft", "description": "Create or replace a draft, including a threaded reply, with plain text, optional HTML, and attachments from base64 or local file paths" },
-    { "name": "save_reply_draft", "description": "Save a reply to one message as a new draft, deriving its recipients, subject and threading headers" }
+    { "name": "save_reply_draft", "description": "Save a reply to one message as a new draft, deriving its recipients, subject and threading headers, optionally quoting the original" },
+    { "name": "save_forward_draft", "description": "Save a forward of one message as a new draft, carrying its whole text, HTML, attachments and inline images" }
   ]
 }

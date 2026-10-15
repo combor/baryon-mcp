@@ -19,7 +19,7 @@ import (
 var wantTools = []string{
 	"list_folders", "list_emails", "search_emails", "get_email", "get_thread",
 	"list_attachments", "get_attachment", "save_attachment",
-	"list_sender_identities", "save_draft", "save_reply_draft",
+	"list_sender_identities", "save_draft", "save_reply_draft", "save_forward_draft",
 }
 
 // introspectionSession connects an in-memory client to the server as it is

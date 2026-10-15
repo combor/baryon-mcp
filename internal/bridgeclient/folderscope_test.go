@@ -86,6 +86,10 @@ func TestProtocolFolderScopeDeniesBeforeSelect(t *testing.T) {
 		"get_email":        func() error { _, err := c.GetEmail(ctx, "Sent", 1, 1); return err },
 		"list_attachments": func() error { _, err := c.ListAttachments(ctx, "Sent", 1, 1); return err },
 		"get_attachment":   func() error { _, err := c.GetAttachment(ctx, "Sent", 1, 1, 0); return err },
+		"message source": func() error {
+			_, err := c.GetMessageSource(ctx, "Sent", 1, 1, AllParts)
+			return err
+		},
 		"get_thread": func() error {
 			_, err := c.GetThread(ctx, ThreadRef{Folder: "Sent", UID: 1, UIDValidity: 1})
 			return err

@@ -4,6 +4,7 @@ package mailparse
 
 import (
 	"fmt"
+	"maps"
 	"slices"
 	"strconv"
 	"strings"
@@ -19,14 +20,18 @@ type TextPart struct {
 	EncodedSize uint32
 }
 
-// Attachment describes one non-body leaf part.
+// Attachment describes one non-body leaf part. Params are its Content-Type
+// parameters, and ContentID its Content-ID without angle brackets, empty when
+// it has none.
 type Attachment struct {
 	Index       int
 	Path        []int
 	Filename    string
 	ContentType string
+	Params      map[string]string
 	Encoding    string
 	EncodedSize uint32
+	ContentID   string
 }
 
 // Outline is the walked shape of a message: at most one plain and one HTML
@@ -93,8 +98,10 @@ func Walk(bs imap.BodyStructure) Outline {
 				Path:        slices.Clone(path),
 				Filename:    attachmentFilename(part, path),
 				ContentType: strings.ToLower(part.MediaType()),
+				Params:      maps.Clone(part.Params),
 				Encoding:    strings.ToLower(part.Encoding),
 				EncodedSize: part.Size,
+				ContentID:   strings.Trim(part.ID, " \t<>"),
 			})
 			return !isRFC822
 		}

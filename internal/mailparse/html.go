@@ -2,6 +2,7 @@ package mailparse
 
 import (
 	"html"
+	"net/url"
 	"strings"
 	"unicode"
 )
@@ -204,6 +205,104 @@ func collapse(s string) string {
 // category carries real accents.
 func invisible(r rune) bool {
 	return r == '\u034f' || unicode.Is(unicode.Cf, r)
+}
+
+// urlSpace ends any cid: URL; unquotedURLEnd also ends one that no quote
+// opened: an unquoted attribute value or a bare CSS url().
+const (
+	urlSpace       = " \t\r\n\f"
+	unquotedURLEnd = urlSpace + ">)\"'"
+)
+
+// ContentIDReferences returns the Content-IDs an HTML body refers to through
+// cid: URLs, lowercased. Only markup can display a part, so references come
+// from tag attributes and stylesheet text; running text, comments and scripts
+// are skipped. Matching ignores case: a spurious match only keeps a part inline
+// that would otherwise travel as a regular attachment.
+func ContentIDReferences(s string) map[string]bool {
+	refs := make(map[string]bool)
+	for i := 0; i < len(s); {
+		j := strings.IndexByte(s[i:], '<')
+		if j < 0 {
+			break
+		}
+		i += j
+		if strings.HasPrefix(s[i:], "<!--") {
+			end := strings.Index(s[i:], "-->")
+			if end < 0 {
+				break
+			}
+			i += end + 3
+			continue
+		}
+		if !startsTag(s, i) {
+			i++
+			continue
+		}
+		name, closing, selfClosing, end := scanTag(s, i)
+		if end < 0 {
+			break
+		}
+		collectContentIDs(s[i:end], refs)
+		if hiddenElements[name] && !closing && !selfClosing {
+			elementEnd := skipElement(s, end, name)
+			if elementEnd < 0 {
+				elementEnd = len(s)
+			}
+			if name == "style" {
+				collectContentIDs(s[end:elementEnd], refs)
+			}
+			end = elementEnd
+		}
+		i = end
+	}
+	return refs
+}
+
+// collectContentIDs adds the cid: URLs in one tag or stylesheet to refs.
+// Entities are decoded first and percent-escapes after, the order a browser
+// applies to an attribute holding a URL. A cid: counts only where a URL can
+// begin — after a quote, an "=", a CSS "url(" or the comma between srcset
+// candidates, whitespace allowed. A URL ends at whitespace, which no valid
+// Content-ID holds and which separates a srcset descriptor; a quoted one also
+// ends at its own closing quote, an unquoted one at ">", ")" or any quote.
+// Trailing commas are dropped, as srcset parsing drops them.
+func collectContentIDs(s string, refs map[string]bool) {
+	s = html.UnescapeString(s)
+	for i := 1; i+4 <= len(s); i++ {
+		if s[i]|0x20 != 'c' || s[i+1]|0x20 != 'i' || s[i+2]|0x20 != 'd' || s[i+3] != ':' {
+			continue
+		}
+		j := i - 1
+		for j > 0 && isHTMLSpace(s[j]) {
+			j--
+		}
+		terminators := unquotedURLEnd
+		switch opener := s[j]; opener {
+		case '"', '\'':
+			terminators = urlSpace + string(opener)
+		case '=', '(', ',':
+		default:
+			continue
+		}
+		start := i + 4
+		end := start
+		for end < len(s) && !strings.ContainsRune(terminators, rune(s[end])) {
+			end++
+		}
+		token := strings.TrimRight(s[start:end], ",")
+		if decoded, err := url.PathUnescape(token); err == nil {
+			token = decoded
+		}
+		if token != "" {
+			refs[strings.ToLower(token)] = true
+		}
+		i = end - 1
+	}
+}
+
+func isHTMLSpace(b byte) bool {
+	return b == ' ' || b == '\t' || b == '\r' || b == '\n' || b == '\f'
 }
 
 func isAlpha(b byte) bool { return b|0x20 >= 'a' && b|0x20 <= 'z' }

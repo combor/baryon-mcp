@@ -21,7 +21,11 @@ func TestUnavailableFailsEveryCall(t *testing.T) {
 		"GetThread":       func() error { _, err := b.GetThread(ctx, ThreadRef{}); return err },
 		"ListAttachments": func() error { _, err := b.ListAttachments(ctx, "INBOX", 1, 1); return err },
 		"GetAttachment":   func() error { _, err := b.GetAttachment(ctx, "INBOX", 1, 1, 0); return err },
-		"SaveDraft":       func() error { _, err := b.SaveDraft(ctx, Draft{}); return err },
+		"GetMessageSource": func() error {
+			_, err := b.GetMessageSource(ctx, "INBOX", 1, 1, AllParts)
+			return err
+		},
+		"SaveDraft": func() error { _, err := b.SaveDraft(ctx, Draft{}); return err },
 	}
 
 	// A method added to Bridge later must be given the same treatment.

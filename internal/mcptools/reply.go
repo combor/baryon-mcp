@@ -181,14 +181,27 @@ func parseAddresses(values []string) []*mail.Address {
 	return out
 }
 
-// replySubject prefixes "Re: " unless one is already there, in any case: a
-// thread carries one prefix, not one per exchange.
+// replySubject prefixes "Re: " unless one is already there.
 func replySubject(subject string) string {
+	return prefixSubject(subject, "Re:")
+}
+
+// forwardSubject prefixes "Fwd: " unless a forward prefix is already there.
+func forwardSubject(subject string) string {
+	return prefixSubject(subject, "Fwd:", "Fw:")
+}
+
+// prefixSubject adds prefix unless the subject already starts with it or an
+// equivalent, in any case: a thread carries one prefix, not one per exchange.
+func prefixSubject(subject, prefix string, equivalents ...string) string {
 	trimmed := strings.TrimSpace(subject)
-	if strings.HasPrefix(strings.ToLower(trimmed), "re:") {
-		return trimmed
+	lower := strings.ToLower(trimmed)
+	for _, existing := range append([]string{prefix}, equivalents...) {
+		if strings.HasPrefix(lower, strings.ToLower(existing)) {
+			return trimmed
+		}
 	}
-	return strings.TrimSpace("Re: " + trimmed)
+	return strings.TrimSpace(prefix + " " + trimmed)
 }
 
 // replyReferences chains the parent's References — or its In-Reply-To when it

@@ -1,6 +1,7 @@
 package mailparse
 
 import (
+	"maps"
 	"strings"
 	"testing"
 	"time"
@@ -128,5 +129,50 @@ func TestHTMLToTextToleratesMalformedMarkup(t *testing.T) {
 		if got := HTMLToText(in); strings.Contains(got, ">") {
 			t.Errorf("HTMLToText(%q) = %q, still carries markup", in, got)
 		}
+	}
+}
+
+func TestContentIDReferences(t *testing.T) {
+	cases := map[string]struct {
+		in   string
+		want []string
+	}{
+		"double quoted":        {`<img src="cid:logo@acme.example">`, []string{"logo@acme.example"}},
+		"single quoted":        {`<img src='cid:ii_l4f8z0w70'>`, []string{"ii_l4f8z0w70"}},
+		"scheme in capitals":   {`<IMG SRC="CID:Logo@Acme.Example">`, []string{"logo@acme.example"}},
+		"percent encoded":      {`<img src="cid:part1%40acme.example">`, []string{"part1@acme.example"}},
+		"background":           {`<td background="cid:bg">`, []string{"bg"}},
+		"css url":              {`<div style="background:url(cid:tile)">`, []string{"tile"}},
+		"bad escape kept":      {`<img src="cid:50%off">`, []string{"50%off"}},
+		"entity quoted url":    {`<div style="background:url(&quot;cid:logo&quot;)">`, []string{"logo"}},
+		"entity in the id":     {`<img src="cid:a&amp;b@x">`, []string{"a&b@x"}},
+		"several":              {`<img src="cid:a"><img src="cid:b">`, []string{"a", "b"}},
+		"unquoted attribute":   {`<img src=cid:bare@x alt="">`, []string{"bare@x"}},
+		"apostrophe inside":    {`<img src="cid:logo's@x">`, []string{"logo's@x"}},
+		"quote inside":         {`<img src='cid:say"hi"@x'>`, []string{`say"hi"@x`}},
+		"text is not a url":    {`<p>cid:report@x</p><p>see cid:other@x</p>`, nil},
+		"space after equals":   {`<img src= cid:spaced@x>`, []string{"spaced@x"}},
+		"space inside url":     {`<div style="background:url( cid:tile@x )">`, []string{"tile@x"}},
+		"space inside quote":   {`<img src=" cid:padded@x ">`, []string{"padded@x"}},
+		"srcset candidates":    {`<img srcset="cid:small@x 1x, cid:retina@x 2x">`, []string{"small@x", "retina@x"}},
+		"srcset no descriptor": {`<img srcset="cid:small@x, cid:retina@x 2x">`, []string{"small@x", "retina@x"}},
+		"quoted text":          {`<p>"cid:report@x" and url(cid:prose@x)</p>`, nil},
+		"stylesheet":           {`<style>.hero{background:url("cid:sheet@x")}</style><p>x</p>`, []string{"sheet@x"}},
+		"script":               {`<script>var u = "cid:js@x";</script>`, nil},
+		"comment":              {`<!-- <img src="cid:hidden@x"> --><img src="cid:shown@x">`, []string{"shown@x"}},
+		"word without colon":   {"see the cid in the header", nil},
+		"empty reference":      {`<img src="cid:">`, nil},
+		"cut short":            {"cid", nil},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			want := make(map[string]bool)
+			for _, id := range tc.want {
+				want[id] = true
+			}
+			if got := ContentIDReferences(tc.in); !maps.Equal(got, want) {
+				t.Errorf("ContentIDReferences(%q) = %v, want %v", tc.in, got, want)
+			}
+		})
 	}
 }

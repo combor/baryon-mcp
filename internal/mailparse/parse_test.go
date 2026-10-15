@@ -229,3 +229,74 @@ func TestDecodeBinaryBase64Wrapped(t *testing.T) {
 		t.Errorf("roundtrip mismatch: %v", got)
 	}
 }
+
+func TestWalkRecordsBareContentID(t *testing.T) {
+	bs := &imap.BodyStructureMultiPart{
+		Subtype: "related",
+		Children: []imap.BodyStructure{
+			textPart("html", "utf-8", 20),
+			&imap.BodyStructureSinglePart{
+				Type: "image", Subtype: "png",
+				ID:       " <logo@acme.example> ",
+				Encoding: "base64", Size: 300,
+			},
+			&imap.BodyStructureSinglePart{
+				Type: "text", Subtype: "csv",
+				Params:   map[string]string{"name": "rates.csv"},
+				Encoding: "quoted-printable", Size: 40,
+			},
+		},
+	}
+	o := Walk(bs)
+	if len(o.Attachments) != 2 {
+		t.Fatalf("attachments = %+v, want 2", o.Attachments)
+	}
+	if got := o.Attachments[0].ContentID; got != "logo@acme.example" {
+		t.Errorf("content id = %q, want logo@acme.example", got)
+	}
+	if got := o.Attachments[1].ContentID; got != "" {
+		t.Errorf("content id = %q, want none", got)
+	}
+	if got := o.Attachments[1].Params["name"]; got != "rates.csv" {
+		t.Errorf("content type params = %v, want the name kept", o.Attachments[1].Params)
+	}
+}
+
+func TestDecodeTextFlagsUndecodableTransferEncoding(t *testing.T) {
+	garbage := []byte("@@@@not base64!!")
+	if res := DecodeText(garbage, "base64", "utf-8", false, 0); !res.DecodeFallback || res.Text != string(garbage) {
+		t.Errorf("undecodable base64 = %+v, want the raw payload flagged", res)
+	}
+	if res := DecodeText([]byte("caf=C3=A9 \x00 rest"), "quoted-printable", "utf-8", false, 0); !res.DecodeFallback || res.Text != "café " {
+		t.Errorf("damaged quoted-printable = %+v, want the readable part flagged", res)
+	}
+	if res := DecodeText([]byte(base64.StdEncoding.EncodeToString([]byte("fine"))), "base64", "utf-8", false, 0); res.DecodeFallback || res.Text != "fine" {
+		t.Errorf("clean base64 = %+v", res)
+	}
+	// A cut made on purpose is reported as truncation, not damage.
+	if res := DecodeText([]byte("Zm9vYmFy"[:5]), "base64", "utf-8", true, 0); res.DecodeFallback {
+		t.Errorf("pre-truncated base64 = %+v, want no decode fallback", res)
+	}
+}
+
+func TestDecodeBinaryLenient(t *testing.T) {
+	cases := []struct {
+		name, raw, encoding string
+		want                string
+		damaged             bool
+	}{
+		{name: "padded", raw: "JVBERg==", encoding: "base64", want: "%PDF"},
+		{name: "missing padding", raw: "JVBE\r\nRg", encoding: "base64", want: "%PDF"},
+		{name: "garbage", raw: "JVBE@@@@", encoding: "base64", want: "%PD", damaged: true},
+		{name: "quoted-printable", raw: "a=3Db", encoding: "quoted-printable", want: "a=b"},
+		{name: "7bit", raw: "as is", encoding: "7bit", want: "as is"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			data, damaged := DecodeBinaryLenient([]byte(tc.raw), tc.encoding)
+			if string(data) != tc.want || damaged != tc.damaged {
+				t.Errorf("DecodeBinaryLenient(%q) = %q, damaged %v; want %q, damaged %v", tc.raw, data, damaged, tc.want, tc.damaged)
+			}
+		})
+	}
+}

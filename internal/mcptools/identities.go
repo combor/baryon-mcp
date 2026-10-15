@@ -21,7 +21,7 @@ type listSenderIdentitiesOutput struct {
 func registerListSenderIdentities(server *mcp.Server, identities []config.Identity) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "list_sender_identities",
-		Description: "List the addresses this server may put in a draft's From header, as configured by the operator. save_draft requires one of them as from; save_reply_draft accepts one and picks a suitable address itself when from is omitted. These are the account's own addresses, not addresses taken from any message.",
+		Description: "List the addresses this server may put in a draft's From header, as configured by the operator. save_draft requires one of them as from; save_reply_draft and save_forward_draft accept one and pick a suitable address themselves when from is omitted. These are the account's own addresses, not addresses taken from any message.",
 		Annotations: readOnly("List sender identities"),
 	}, func(ctx context.Context, req *mcp.CallToolRequest, in struct{}) (*mcp.CallToolResult, listSenderIdentitiesOutput, error) {
 		out := listSenderIdentitiesOutput{Identities: make([]senderIdentityOutput, 0, len(identities))}

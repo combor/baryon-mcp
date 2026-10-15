@@ -36,10 +36,13 @@ type Folder struct {
 	Attributes []string
 }
 
-// DraftAttachment is one regular file attachment to save with a draft.
+// DraftAttachment is one file to save with a draft. A non-empty ContentID,
+// without angle brackets, makes it an inline part the HTML body shows through
+// a cid: URL rather than a regular attachment.
 type DraftAttachment struct {
 	Filename    string
 	ContentType string
+	ContentID   string
 	Data        []byte
 }
 
@@ -89,6 +92,7 @@ type Bridge interface {
 	GetThread(ctx context.Context, ref ThreadRef) (*Thread, error)
 	ListAttachments(ctx context.Context, folder string, uid, uidvalidity uint32) ([]AttachmentInfo, error)
 	GetAttachment(ctx context.Context, folder string, uid, uidvalidity uint32, index int) (*AttachmentContent, error)
+	GetMessageSource(ctx context.Context, folder string, uid, uidvalidity uint32, parts SourceParts) (*MessageSource, error)
 	SaveDraft(ctx context.Context, draft Draft) (*SavedDraft, error)
 }
 

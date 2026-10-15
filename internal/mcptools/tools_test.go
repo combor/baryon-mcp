@@ -38,6 +38,11 @@ type fakeBridge struct {
 	attachment    *bridgeclient.AttachmentContent
 	attachmentErr error
 
+	source         *bridgeclient.MessageSource
+	sourceErr      error
+	gotSourceParts bridgeclient.SourceParts
+	sourceCalls    int
+
 	gotDraft       bridgeclient.Draft
 	savedDraft     *bridgeclient.SavedDraft
 	saveDraftErr   error
@@ -82,6 +87,15 @@ func (f *fakeBridge) GetAttachment(ctx context.Context, folder string, uid, uidv
 		return nil, f.attachmentErr
 	}
 	return f.attachment, f.attachmentErr
+}
+
+func (f *fakeBridge) GetMessageSource(ctx context.Context, folder string, uid, uidvalidity uint32, parts bridgeclient.SourceParts) (*bridgeclient.MessageSource, error) {
+	f.sourceCalls++
+	f.gotSourceParts = parts
+	if f.source == nil {
+		return nil, f.sourceErr
+	}
+	return f.source, f.sourceErr
 }
 
 func (f *fakeBridge) SaveDraft(ctx context.Context, draft bridgeclient.Draft) (*bridgeclient.SavedDraft, error) {

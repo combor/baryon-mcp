@@ -62,6 +62,7 @@ func TestContentToolDescriptionsWarnAboutSenderControlledData(t *testing.T) {
 	for _, name := range []string{
 		"list_emails", "search_emails", "get_email", "get_thread",
 		"list_attachments", "get_attachment", "save_attachment", "save_reply_draft",
+		"save_forward_draft",
 	} {
 		if !warned[name] {
 			t.Errorf("%s does not warn that its content is sender-controlled", name)
