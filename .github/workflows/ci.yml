@@ -110,11 +110,11 @@ jobs:
           printf '%s\n' "$RPM_GPG_PRIVATE_KEY" > "$RUNNER_TEMP/rpm-signing-private.asc"
       # goreleaser's nix publisher shells out to nix-hash, which the runner
       # image does not ship.
-      - uses: cachix/install-nix-action@448cde739abec1eaf0646249e3d25bb8d9bc7702 # v31.11.2
+      - uses: cachix/install-nix-action@91f6a0f59e94dfb2cfed0f4000f36a68ead1d20c # v31.11.4
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@a4f02ab5355a589de60d917a659ce617ed19b3de # v7.3.0
         with:
-          version: v2.18.3
+          version: v2.20.1
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -157,7 +157,7 @@ jobs:
       # The arm64 image is cross-compiled by Go and its runtime stage only
       # copies that binary in, so no emulation is involved.
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
-      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -231,9 +231,9 @@ jobs:
         run: |
           archive="$RUNNER_TEMP/mcp-publisher_linux_amd64.tar.gz"
           curl --fail --location --retry 3 \
-            https://github.com/modelcontextprotocol/registry/releases/download/v1.8.1/mcp-publisher_linux_amd64.tar.gz \
+            https://github.com/modelcontextprotocol/registry/releases/download/v1.8.9/mcp-publisher_linux_amd64.tar.gz \
             --output "$archive"
-          echo "a06c9096dcb9727c13555b6be26c7effa707b01f06a4c561ba7a3635443cf2cc  $archive" \
+          echo "4d527ca8f1ced0394c962dc925c2a4a4addef441cbefd62501c875e9481823a8  $archive" \
             | sha256sum --check -
           tar -xzf "$archive" -C "$RUNNER_TEMP" mcp-publisher
       - id: registry_version
