@@ -18,7 +18,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - id: govulncheck
-        uses: golang/govulncheck-action@032d45514ae346b1db93c04b0c90b841c370344f # v1.1.0
+        uses: golang/govulncheck-action@v1.1.0
         with:
           cache: false
 
@@ -27,11 +27,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v7.0.0
         with:
           go-version-file: 'go.mod'
-          cache: true
+          # Off for tag builds, which publish the release.
+          cache: ${{ !startsWith(github.ref, 'refs/tags/') }}
       - run: go mod download
       - name: Shell script checks
         run: |
@@ -55,14 +58,17 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v7.0.0
         with:
           go-version-file: 'go.mod'
-          cache: true
-      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+          # Off for tag builds, which publish the release.
+          cache: ${{ !startsWith(github.ref, 'refs/tags/') }}
+      - uses: docker/setup-buildx-action@v4.4.1
       - name: Build image
-        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        uses: docker/build-push-action@v7.4.0
         with:
           context: .
           platforms: linux/amd64
@@ -75,6 +81,36 @@ jobs:
         env:
           BARYON_SMOKE_IMAGE: baryon-mcp:ci
         run: go test -count=1 -run TestContainerServesIntrospection ./cmd/baryon-mcp
+
+  lockfile:
+    name: Verify Actions Lockfile
+    runs-on: ubuntu-slim
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      # Fails when .github/workflows/actions.lock is out of sync with the
+      # workflows, or a locked pin no longer verifies upstream. After adding
+      # a workflow or changing a `uses:` line, rerun `gh actions-lock`.
+      - run: gh extension install github/gh-actions-lock --pin v0.4.1
+      - run: gh actions-lock --verify
+
+  zizmor:
+    name: Workflow Security Lint
+    runs-on: ubuntu-slim
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      # 1.32.0 is the first release that reads the lockfile.
+      - uses: zizmorcore/zizmor-action@v0.8.1
+        with:
+          version: v1.32.0
+          advanced-security: false
 
   release:
     name: Release
@@ -90,11 +126,12 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v7.0.1
         with:
           # Allow goreleaser to access older tag information.
           fetch-depth: 0
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+          persist-credentials: false
+      - uses: actions/setup-go@v7.0.0
         with:
           go-version-file: 'go.mod'
           cache: false
@@ -110,9 +147,9 @@ jobs:
           printf '%s\n' "$RPM_GPG_PRIVATE_KEY" > "$RUNNER_TEMP/rpm-signing-private.asc"
       # goreleaser's nix publisher shells out to nix-hash, which the runner
       # image does not ship.
-      - uses: cachix/install-nix-action@91f6a0f59e94dfb2cfed0f4000f36a68ead1d20c # v31.11.4
+      - uses: cachix/install-nix-action@v31.11.4
       - name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@a4f02ab5355a589de60d917a659ce617ed19b3de # v7.3.0
+        uses: goreleaser/goreleaser-action@v7.3.0
         with:
           version: v2.20.1
           args: release --clean
@@ -153,17 +190,19 @@ jobs:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
       # The arm64 image is cross-compiled by Go and its runtime stage only
       # copies that binary in, so no emulation is involved.
-      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
-      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+      - uses: docker/setup-buildx-action@v4.4.1
+      - uses: docker/login-action@v4.8.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - id: meta
-        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        uses: docker/metadata-action@v6.2.0
         with:
           images: ghcr.io/combor/baryon-mcp
           # A prerelease tag such as v0.4.0-rc1 must not move latest.
@@ -174,7 +213,7 @@ jobs:
             type=sha,format=long
             type=raw,value=latest,enable=${{ !contains(github.ref_name, '-') }}
       - id: build
-        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        uses: docker/build-push-action@v7.4.0
         with:
           context: .
           platforms: linux/amd64,linux/arm64
@@ -187,6 +226,8 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
       - name: Verify the published image is public
+        env:
+          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
         run: |
           repo=combor/baryon-mcp
           manifest=$RUNNER_TEMP/ghcr-manifest.json
@@ -197,7 +238,7 @@ jobs:
           token=$(jq -r .token "$RUNNER_TEMP/ghcr-token.json")
           curl -fsSL -H "Authorization: Bearer $token" \
             -H "Accept: application/vnd.oci.image.index.v1+json" \
-            "https://ghcr.io/v2/$repo/manifests/${{ steps.build.outputs.digest }}" >"$manifest"
+            "https://ghcr.io/v2/$repo/manifests/$IMAGE_DIGEST" >"$manifest"
           published=$(jq -r '[.manifests[] | select(.platform.os == "linux") | "\(.platform.os)/\(.platform.architecture)"] | sort | join(" ")' "$manifest")
           echo "published: $published"
           [ "$published" = "linux/amd64 linux/arm64" ] || exit 1
@@ -213,7 +254,9 @@ jobs:
       contents: read
       id-token: write
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
       - name: Download released MCPB bundles
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
