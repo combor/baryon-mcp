@@ -158,3 +158,8 @@ nix:
 
 changelog:
   disable: true
+
+release:
+  # CI publishes the release once the MCPB bundles are attached: an
+  # immutable release accepts no new assets after it is published.
+  draft: true
