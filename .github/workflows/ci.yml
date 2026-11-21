@@ -30,7 +30,7 @@ jobs:
       - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-go@v7.0.0
+      - uses: actions/setup-go@v7.1.0
         with:
           go-version-file: 'go.mod'
           # Off for tag builds, which publish the release.
@@ -61,7 +61,7 @@ jobs:
       - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-go@v7.0.0
+      - uses: actions/setup-go@v7.1.0
         with:
           go-version-file: 'go.mod'
           # Off for tag builds, which publish the release.
@@ -134,7 +134,7 @@ jobs:
           # Allow goreleaser to access older tag information.
           fetch-depth: 0
           persist-credentials: false
-      - uses: actions/setup-go@v7.0.0
+      - uses: actions/setup-go@v7.1.0
         with:
           go-version-file: 'go.mod'
           cache: false
@@ -150,11 +150,11 @@ jobs:
           printf '%s\n' "$RPM_GPG_PRIVATE_KEY" > "$RUNNER_TEMP/rpm-signing-private.asc"
       # goreleaser's nix publisher shells out to nix-hash, which the runner
       # image does not ship.
-      - uses: cachix/install-nix-action@v31.11.4
+      - uses: cachix/install-nix-action@v32.0.0
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v7.3.0
         with:
-          version: v2.20.1
+          version: v2.20.3
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -292,9 +292,9 @@ jobs:
         run: |
           archive="$RUNNER_TEMP/mcp-publisher_linux_amd64.tar.gz"
           curl --fail --location --retry 3 \
-            https://github.com/modelcontextprotocol/registry/releases/download/v1.8.9/mcp-publisher_linux_amd64.tar.gz \
+            https://github.com/modelcontextprotocol/registry/releases/download/v1.8.10/mcp-publisher_linux_amd64.tar.gz \
             --output "$archive"
-          echo "4d527ca8f1ced0394c962dc925c2a4a4addef441cbefd62501c875e9481823a8  $archive" \
+          echo "32d287ed6fb7dc04eddd2621097784c06a355b2348b35ccc630a1643aa75ff4a  $archive" \
             | sha256sum --check -
           tar -xzf "$archive" -C "$RUNNER_TEMP" mcp-publisher
       - id: registry_version
